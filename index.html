@@ -280,6 +280,21 @@
 
   <!-- 입력 -->
   <div id="tab-input" class="body hidden">
+    <div class="section-label">이번 달 실수령 월급</div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header" style="margin-bottom:8px">
+        <div class="card-name">실수령액</div>
+        <div class="card-right">
+          <div class="card-val" id="ei-salary" style="color:var(--accent)">0원</div>
+          <div class="card-meta">목표 380만원</div>
+        </div>
+      </div>
+      <div class="input-row">
+        <input type="number" id="inp-salary" placeholder="380" min="0" step="1" oninput="syncSalary()">
+        <span class="unit">만원</span>
+        <button class="btn-sm" onclick="fillSalary()">목표치</button>
+      </div>
+    </div>
     <div class="section-label">월 투자 내역 입력</div>
     <div class="info-box">QLD + CMA 합산 50만원 기준 · 당월 상황에 따라 유동 조정</div>
     <div id="input-cats"></div>
@@ -506,6 +521,18 @@ function switchTab(t) {
 }
 
 // ─── 입력 동기화 ────────────────────────────────────────
+function syncSalary() {
+  const el = document.getElementById("inp-salary");
+  const v = (parseFloat(el.value)||0) * 10000;
+  inputVals.salary = v;
+  const ei = document.getElementById("ei-salary");
+  if (ei) ei.textContent = fw(v);
+}
+function fillSalary() {
+  const el = document.getElementById("inp-salary");
+  if (el) { el.value = 380; syncSalary(); }
+}
+
 function syncInput(cat) {
   const el = document.getElementById(`inp-${cat}`);
   const v = (parseFloat(el.value)||0) * 10000;
@@ -596,12 +623,31 @@ function renderDash() {
   const totalNow = CATS.reduce((s,c) => s+(mData[c]||0), 0);
   const totalTgt = CATS.reduce((s,c) => s+(targets[c]||0), 0);
   const pNow     = pbar(totalNow, totalTgt);
+  const salary   = mData.salary || 0;
+  const remaining = salary > 0 ? salary - totalNow : null;
+  const savingRate = salary > 0 ? Math.round(totalNow/salary*100) : null;
+
+  const salaryRow = salary > 0 ? `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--border)">
+      <div>
+        <div class="summ-lbl">이번 달 실수령</div>
+        <div style="font-size:18px;font-weight:500;color:var(--accent)">${fw(salary)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="summ-lbl">저축률</div>
+        <div style="font-size:18px;font-weight:500;color:${savingRate>=50?'#1baf7a':savingRate>=30?'#eda100':'var(--text)'}">${savingRate}%</div>
+      </div>
+    </div>` : "";
+
   document.getElementById("total-card").innerHTML = `
+    ${salaryRow}
     <div class="big-total">
       <div><div class="summ-lbl">투자 총액</div><div class="big-num">${fw(totalNow)}</div></div>
       <div style="text-align:right">
-        <div class="summ-lbl">목표 달성률</div>
-        <div class="big-num" style="color:${pctColor(pNow)}">${pNow}%</div>
+        <div class="summ-lbl">${remaining!==null ? '남은 돈' : '목표 달성률'}</div>
+        <div class="big-num" style="color:${remaining!==null ? (remaining>=0?'var(--text)':'#e34948') : pctColor(pNow)}">
+          ${remaining!==null ? fw(remaining) : pNow+'%'}
+        </div>
       </div>
     </div>
     <div class="pbar-wrap" style="margin:10px 0 0">
@@ -646,6 +692,11 @@ function renderDash() {
 function renderInput() {
   const mData = appData.months[currentMonth]||{};
   inputVals = { ...mData };
+  const sal = mData.salary||0;
+  const salInp = document.getElementById("inp-salary");
+  const salEi  = document.getElementById("ei-salary");
+  if (salInp) salInp.value = sal>0 ? sal/10000 : "";
+  if (salEi)  salEi.textContent = fw(sal);
   document.getElementById("input-cats").innerHTML = CATS.map(c => {
     const t=appData.targets[c]||0, a=mData[c]||0, p=pbar(a,t), col=META[c].color;
     const sub = META[c].sub ? `<div class="card-sub-txt">${META[c].sub}</div>` : "";
@@ -696,8 +747,11 @@ function renderChart() {
     const tot=CATS.reduce((s,c)=>s+(md[c]||0),0);
     const p=totalTgt>0?Math.round(tot/totalTgt*100):0;
     const isCur=m===currentMonth;
+    const sal=md.salary||0;
+    const salTxt=sal>0?fwS(sal):"—";
     return `<tr onclick="goMonth('${m}')">
       <td style="color:${isCur?'var(--accent)':'var(--text)'};font-weight:${isCur?500:400}">${dispM(m)}</td>
+      <td>${salTxt}</td>
       <td>${fw(tot)}</td>
       <td style="color:${pctColor(p)}">${p}%</td>
     </tr>`;
@@ -714,6 +768,7 @@ function renderChart() {
       <table>
         <thead><tr>
           <td style="color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">월</td>
+          <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">실수령</td>
           <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">투자액</td>
           <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">달성률</td>
         </tr></thead>
