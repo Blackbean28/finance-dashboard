@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>재테크 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --surface2: #f1f0ec;
+    --border: rgba(0,0,0,0.1); --border-s: rgba(0,0,0,0.18);
+    --text: #0b0b0b; --text2: #52514e; --text3: #898781;
+    --accent: #2a78d6; --accent-bg: #e6f1fb; --accent-b: rgba(42,120,214,0.3);
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141414; --surface: #1e1e1c; --surface2: #262624;
+      --border: rgba(255,255,255,0.1); --border-s: rgba(255,255,255,0.18);
+      --text: #f0f0ee; --text2: #b0afa9; --text3: #686763;
+      --accent: #3987e5; --accent-bg: #0c1e35; --accent-b: rgba(57,135,229,0.35);
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; max-width: 480px; margin: 0 auto; padding-bottom: 40px;
+  }
+
+  /* Setup screen */
+  #setup-screen {
+    padding: 40px 24px;
+    display: flex; flex-direction: column; gap: 16px;
+    min-height: 100vh;
+  }
+  #setup-screen h2 { font-size: 18px; font-weight: 500; }
+  #setup-screen p { font-size: 13px; color: var(--text2); line-height: 1.7; }
+  .setup-step {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .setup-step-num {
+    font-size: 11px; font-weight: 500; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;
+  }
+  .setup-step-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .setup-step p { font-size: 12px; color: var(--text3); }
+  code {
+    background: var(--surface2); padding: 1px 5px;
+    border-radius: 4px; font-size: 11px; font-family: monospace;
+  }
+  .token-input-wrap { margin-top: 10px; display: flex; gap: 8px; }
+  .token-input-wrap input {
+    flex: 1; background: var(--surface2);
+    border: 0.5px solid var(--border-s);
+    border-radius: var(--radius); color: var(--text);
+    padding: 8px 12px; font-size: 13px; outline: none;
+    font-family: monospace;
+  }
+  .token-input-wrap input:focus { border-color: var(--accent); }
+  #token-error { font-size: 12px; color: #e34948; margin-top: 6px; display: none; }
+
+  /* Main app */
+  #app { display: none; }
+  header {
+    padding: 14px 16px 10px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--surface);
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  header h1 { font-size: 15px; font-weight: 500; }
+  header p { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .sync-badge {
+    font-size: 11px; padding: 3px 8px;
+    border-radius: 20px; white-space: nowrap;
+    border: 0.5px solid var(--border); color: var(--text3);
+    background: var(--surface2);
+    transition: all 0.2s;
+  }
+  .sync-badge.syncing { color: var(--accent); border-color: var(--accent-b); background: var(--accent-bg); }
+  .sync-badge.synced  { color: #1baf7a; border-color: rgba(27,175,122,0.3); background: #eaf7f2; }
+  .sync-badge.error   { color: #e34948; border-color: rgba(227,73,72,0.3); background: #fdeaea; }
+  @media (prefers-color-scheme: dark) {
+    .sync-badge.synced { background: #0f2a20; }
+    .sync-badge.error  { background: #2a0f0f; }
+  }
+  .tabs {
+    display: flex; background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .tab-btn {
+    flex: 1; padding: 10px 4px; background: none; border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text3); font-size: 12px;
+    cursor: pointer; font-family: inherit; transition: color 0.15s;
+  }
+  .tab-btn.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .month-nav {
+    display: flex; align-items: center;
+    padding: 10px 16px; background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+  }
+  .nav-btn {
+    background: none; border: 0.5px solid var(--border-s);
+    color: var(--text2); padding: 5px 12px;
+    border-radius: var(--radius); cursor: pointer; font-size: 13px; font-family: inherit;
+  }
+  .nav-btn:hover { background: var(--surface2); }
+  .month-label { flex: 1; text-align: center; font-weight: 500; font-size: 14px; }
+  .body { padding: 14px 16px; }
+  .section-label {
+    font-size: 11px; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 500; margin-bottom: 10px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 12px; margin-bottom: 10px;
+  }
+  .card:last-child { margin-bottom: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; display: inline-block; }
+  .card-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .card-sub-txt { font-size: 11px; color: var(--text3); margin-left: 14px; }
+  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+  .card-right { text-align: right; }
+  .card-val { font-size: 14px; font-weight: 500; }
+  .card-meta { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .pbar-wrap { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin: 8px 0; }
+  .pbar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .input-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+  input[type="number"] {
+    flex: 1; background: var(--surface2); border: 0.5px solid var(--border-s);
+    border-radius: var(--radius); color: var(--text);
+    padding: 7px 10px; font-size: 14px; outline: none; font-family: inherit;
+  }
+  input[type="number"]:focus { border-color: var(--accent); }
+  .unit { font-size: 12px; color: var(--text3); white-space: nowrap; }
+  .btn-sm {
+    background: var(--surface2); border: 0.5px solid var(--border-s);
+    color: var(--text2); padding: 7px 8px; border-radius: var(--radius);
+    cursor: pointer; font-size: 11px; font-family: inherit; white-space: nowrap;
+  }
+  .btn-primary {
+    width: 100%; background: var(--accent); border: none; color: white;
+    padding: 13px; border-radius: var(--radius);
+    font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px;
+    font-family: inherit; transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-danger {
+    width: 100%; background: #fdeaea; border: 0.5px solid #f5c1c1; color: #c0392b;
+    padding: 13px; border-radius: var(--radius);
+    font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px;
+    font-family: inherit;
+  }
+  .btn-ghost {
+    width: 100%; background: var(--surface2); border: 0.5px solid var(--border-s); color: var(--text2);
+    padding: 13px; border-radius: var(--radius);
+    font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px;
+    font-family: inherit;
+  }
+  @media (prefers-color-scheme: dark) {
+    .btn-danger { background: #2a1a1a; border-color: #5a2020; color: #e87171; }
+  }
+  .info-box {
+    background: var(--accent-bg); border: 0.5px solid var(--accent-b);
+    border-radius: 12px; padding: 10px 12px;
+    font-size: 12px; color: var(--accent); margin-bottom: 12px;
+  }
+  .summ-lbl { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
+  .summ-val { font-size: 20px; font-weight: 500; }
+  .big-total { display: flex; justify-content: space-between; align-items: center; }
+  .big-num { font-size: 22px; font-weight: 500; }
+  .chart-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 12px;
+  }
+  .chart-lbl { font-size: 12px; color: var(--text3); margin-bottom: 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  tr { cursor: pointer; }
+  tr:hover td { background: var(--surface2); }
+  td { padding: 9px 4px; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+  td:nth-child(2) { text-align: right; color: var(--text2); }
+  td:last-child { text-align: right; font-weight: 500; }
+  .empty-state { text-align: center; padding: 40px 16px; color: var(--text3); }
+  .empty-icon { font-size: 36px; margin-bottom: 10px; }
+  .hidden { display: none !important; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 9px 18px;
+    border-radius: 20px; font-size: 13px; z-index: 999;
+    white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+  .mt { margin-top: 20px; }
+  .setting-row { display: flex; align-items: center; gap: 10px; }
+  .setting-info { flex: 1; }
+  .setting-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .setting-cur { font-size: 11px; color: var(--text3); margin-left: 14px; }
+  input.w70 { width: 65px; flex: none; }
+  .divider { height: 0.5px; background: var(--border); margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<!-- 최초 설정 화면 -->
+<div id="setup-screen">
+  <div>
+    <h2>GitHub 연동 설정</h2>
+    <p style="margin-top:6px">데이터를 GitHub Gist에 저장해서 어디서든 동기화합니다. 1회만 설정하면 됩니다.</p>
+  </div>
+
+  <div class="setup-step">
+    <div class="setup-step-num">Step 1</div>
+    <div class="setup-step-title">Personal Access Token 발급</div>
+    <p>
+      GitHub → Settings → Developer settings<br>
+      → Personal access tokens → Tokens (classic)<br>
+      → Generate new token → <code>gist</code> 권한만 체크 → 생성<br><br>
+      생성된 토큰(<code>ghp_...</code>)을 복사하세요.
+    </p>
+  </div>
+
+  <div class="setup-step">
+    <div class="setup-step-num">Step 2</div>
+    <div class="setup-step-title">토큰 입력</div>
+    <p>토큰은 이 기기의 브라우저에만 저장됩니다. 파일이나 서버에 저장되지 않습니다.</p>
+    <div class="token-input-wrap">
+      <input type="password" id="token-inp" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+      <button class="btn-primary" style="width:auto;margin:0;padding:8px 16px" onclick="connectGist()">연결</button>
+    </div>
+    <div id="token-error">토큰이 올바르지 않거나 gist 권한이 없습니다. 다시 확인해주세요.</div>
+  </div>
+</div>
+
+<!-- 메인 앱 -->
+<div id="app">
+  <header>
+    <div>
+      <h1>재테크 대시보드</h1>
+      <p id="hdr-sub">월급 380만원</p>
+    </div>
+    <div class="sync-badge" id="sync-badge">동기화 대기</div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('dash')">현황</button>
+    <button class="tab-btn" onclick="switchTab('input')">입력</button>
+    <button class="tab-btn" onclick="switchTab('chart')">누적차트</button>
+    <button class="tab-btn" onclick="switchTab('set')">설정</button>
+  </div>
+
+  <div class="month-nav">
+    <button class="nav-btn" onclick="shiftMonth(-1)">◀</button>
+    <div class="month-label" id="month-label"></div>
+    <button class="nav-btn" onclick="shiftMonth(1)">▶</button>
+  </div>
+
+  <!-- 현황 -->
+  <div id="tab-dash" class="body">
+    <div class="section-label">전체 누적</div>
+    <div class="grid2" id="summ-cards"></div>
+    <div class="section-label">이번 달 현황</div>
+    <div class="card" id="total-card"></div>
+    <div id="dash-cats"></div>
+    <div class="chart-card" id="pie-wrap">
+      <div class="chart-lbl">이번 달 배분</div>
+      <div class="legend" id="pie-legend"></div>
+      <div style="position:relative;height:180px">
+        <canvas id="pieChart" role="img" aria-label="이번 달 투자 배분 도넛 차트"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 입력 -->
+  <div id="tab-input" class="body hidden">
+    <div class="section-label">월 투자 내역 입력</div>
+    <div class="info-box">QLD + CMA 합산 50만원 기준 · 당월 상황에 따라 유동 조정</div>
+    <div id="input-cats"></div>
+    <button class="btn-primary" id="save-btn" onclick="saveMonth()">저장 및 동기화</button>
+  </div>
+
+  <!-- 누적차트 -->
+  <div id="tab-chart" class="body hidden">
+    <div class="section-label">누적 투자 추이</div>
+    <div id="chart-area"></div>
+  </div>
+
+  <!-- 설정 -->
+  <div id="tab-set" class="body hidden">
+    <div class="section-label">월 목표 금액 설정</div>
+    <div class="info-box">QLD + CMA 합산 50만원 권장 · 두 항목은 매달 유동 조정</div>
+    <div id="set-cats"></div>
+    <button class="btn-primary" onclick="saveTargets()">목표 저장 및 동기화</button>
+    <div class="divider"></div>
+    <div class="section-label">데이터 관리</div>
+    <button class="btn-ghost" onclick="forceSync()">Gist에서 다시 불러오기</button>
+    <button class="btn-danger" onclick="resetAll()">전체 초기화</button>
+    <div class="divider"></div>
+    <div class="section-label">GitHub 연동</div>
+    <div class="card" id="gist-info-card"></div>
+    <button class="btn-ghost" onclick="disconnectGist()">연동 해제</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── 상수 ───────────────────────────────────────────────
+const GIST_FILE = "finance-data.json";
+const LS_TOKEN  = "fd_gh_token";
+const LS_GIST   = "fd_gh_gist_id";
+
+const DEF_TARGETS = {
+  적금:500000, 나스닥:750000, SP500:450000,
+  반도체:300000, QLD:200000, CMA:300000
+};
+const META = {
+  적금:  { label:"청년미래적금",  color:"#2a78d6", sub:"" },
+  나스닥: { label:"ISA 나스닥100", color:"#1baf7a", sub:"ISA 내 보유" },
+  SP500:  { label:"ISA S&P500",   color:"#3b6d11", sub:"ISA 내 보유" },
+  반도체: { label:"ISA 반도체",   color:"#eda100", sub:"ISA 내 보유" },
+  QLD:    { label:"QLD",          color:"#e34948", sub:"레버리지 ETF" },
+  CMA:    { label:"CMA 목돈",     color:"#eb6834", sub:"목돈 적립" },
+};
+const CATS = Object.keys(META);
+
+// ─── 상태 ───────────────────────────────────────────────
+let appData = { targets: {...DEF_TARGETS}, months: {} };
+let currentMonth = getCurMonth();
+let inputVals = {};
+let activeTab  = "dash";
+let pieInst    = null;
+let areaInst   = null;
+let editTargets = {};
+
+// ─── 유틸 ───────────────────────────────────────────────
+function getCurMonth() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
+}
+function shiftM(m, d) {
+  const [y,mo] = m.split("-").map(Number);
+  const dt = new Date(y, mo-1+d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
+}
+function dispM(m) {
+  const [y,mo] = m.split("-");
+  return `${y}년 ${parseInt(mo)}월`;
+}
+function fw(n) {
+  if (!n) return "0원";
+  if (n >= 100000000) return `${(n/100000000).toFixed(1)}억원`;
+  if (n >= 10000) return `${Math.round(n/10000)}만원`;
+  return `${n.toLocaleString()}원`;
+}
+function fwS(n) {
+  if (!n) return "0";
+  if (n >= 100000000) return `${(n/100000000).toFixed(1)}억`;
+  if (n >= 10000) return `${Math.round(n/10000)}만`;
+  return n.toLocaleString();
+}
+function pbar(a, t) { return t>0 ? Math.min(Math.round(a/t*100), 100) : 0; }
+function pctColor(p) {
+  if (p>=100) return "#1baf7a"; if (p>=70) return "#eda100"; return "var(--text3)";
+}
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2200);
+}
+function setSyncBadge(state, txt) {
+  const el = document.getElementById("sync-badge");
+  el.className = `sync-badge ${state}`; el.textContent = txt;
+}
+
+// ─── GitHub Gist API ────────────────────────────────────
+function getToken()  { return localStorage.getItem(LS_TOKEN); }
+function getGistId() { return localStorage.getItem(LS_GIST); }
+
+async function createGist(token) {
+  const res = await fetch("https://api.github.com/gists", {
+    method: "POST",
+    headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      description: "승민 재테크 대시보드 데이터",
+      public: false,
+      files: { [GIST_FILE]: { content: JSON.stringify(appData, null, 2) } }
+    })
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  localStorage.setItem(LS_GIST, data.id);
+  return data.id;
+}
+
+async function loadFromGist() {
+  const token = getToken(); if (!token) return false;
+  let gistId = getGistId();
+  if (!gistId) {
+    gistId = await createGist(token);
+    if (!gistId) return false;
+    return true;
+  }
+  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+    headers: { Authorization: `token ${token}` }
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  const content = data.files?.[GIST_FILE]?.content;
+  if (content) { appData = JSON.parse(content); return true; }
+  return false;
+}
+
+async function saveToGist() {
+  const token = getToken(); if (!token) return false;
+  let gistId = getGistId();
+  if (!gistId) {
+    gistId = await createGist(token);
+    if (!gistId) return false;
+    return true;
+  }
+  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+    method: "PATCH",
+    headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(appData, null, 2) } } })
+  });
+  return res.ok;
+}
+
+async function validateToken(token) {
+  const res = await fetch("https://api.github.com/gists?per_page=1", {
+    headers: { Authorization: `token ${token}` }
+  });
+  return res.ok;
+}
+
+// ─── 연동 설정 ──────────────────────────────────────────
+async function connectGist() {
+  const token = document.getElementById("token-inp").value.trim();
+  if (!token) return;
+  const errEl = document.getElementById("token-error");
+  errEl.style.display = "none";
+  setSyncBadge("syncing", "확인 중...");
+  const btn = document.querySelector("#setup-screen .btn-primary");
+  btn.textContent = "확인 중..."; btn.disabled = true;
+  const valid = await validateToken(token);
+  if (!valid) {
+    errEl.style.display = "block";
+    btn.textContent = "연결"; btn.disabled = false;
+    return;
+  }
+  localStorage.setItem(LS_TOKEN, token);
+  await initApp();
+}
+
+async function disconnectGist() {
+  if (!confirm("연동을 해제하면 이 기기에서 동기화가 중단됩니다. (Gist 데이터는 삭제되지 않습니다)")) return;
+  localStorage.removeItem(LS_TOKEN);
+  localStorage.removeItem(LS_GIST);
+  document.getElementById("app").style.display = "none";
+  document.getElementById("setup-screen").style.display = "flex";
+}
+
+async function forceSync() {
+  setSyncBadge("syncing", "동기화 중...");
+  const ok = await loadFromGist();
+  if (ok) { setSyncBadge("synced", "동기화됨"); renderAll(); showToast("Gist에서 불러왔습니다 ✓"); }
+  else     { setSyncBadge("error", "오류"); showToast("불러오기 실패"); }
+}
+
+// ─── 앱 초기화 ──────────────────────────────────────────
+async function initApp() {
+  document.getElementById("setup-screen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  setSyncBadge("syncing", "동기화 중...");
+  document.getElementById("month-label").textContent = dispM(currentMonth);
+  const ok = await loadFromGist();
+  setSyncBadge(ok ? "synced" : "error", ok ? "동기화됨" : "오프라인");
+  renderAll();
+}
+
+// ─── 월 이동 ────────────────────────────────────────────
+function shiftMonth(d) {
+  currentMonth = shiftM(currentMonth, d);
+  document.getElementById("month-label").textContent = dispM(currentMonth);
+  renderAll();
+}
+
+// ─── 탭 전환 ────────────────────────────────────────────
+function switchTab(t) {
+  document.querySelectorAll(".tab-btn").forEach((b,i) => {
+    b.classList.toggle("active", ["dash","input","chart","set"][i] === t);
+  });
+  ["dash","input","chart","set"].forEach(id => {
+    document.getElementById(`tab-${id}`).classList.toggle("hidden", id !== t);
+  });
+  activeTab = t;
+  renderAll();
+}
+
+// ─── 입력 동기화 ────────────────────────────────────────
+function syncInput(cat) {
+  const el = document.getElementById(`inp-${cat}`);
+  const v = (parseFloat(el.value)||0) * 10000;
+  inputVals[cat] = v;
+  const t = appData.targets[cat]||0;
+  const p = pbar(v,t);
+  const ei = document.getElementById(`ei-${cat}`);
+  const ep = document.getElementById(`ep-${cat}`);
+  if (ei) ei.textContent = fw(v);
+  if (ep) ep.style.width = `${p}%`;
+}
+function fillTarget(cat) {
+  const t = appData.targets[cat]||0;
+  const el = document.getElementById(`inp-${cat}`);
+  if (el) { el.value = t/10000; syncInput(cat); }
+}
+
+// ─── 저장 ───────────────────────────────────────────────
+async function saveMonth() {
+  appData.months[currentMonth] = { ...inputVals };
+  setSyncBadge("syncing", "저장 중...");
+  const btn = document.getElementById("save-btn");
+  btn.textContent = "저장 중..."; btn.disabled = true;
+  const ok = await saveToGist();
+  setSyncBadge(ok?"synced":"error", ok?"동기화됨":"저장 실패");
+  btn.textContent = "저장 및 동기화"; btn.disabled = false;
+  showToast(ok ? `${dispM(currentMonth)} 저장됐습니다 ✓` : "저장 실패. 인터넷 연결을 확인하세요");
+  if (ok) switchTab("dash");
+}
+
+async function saveTargets() {
+  CATS.forEach(c => {
+    const el = document.getElementById(`st-${c}`);
+    if (el) { const v=(parseFloat(el.value)||0)*10000; if(v>0) appData.targets[c]=v; }
+  });
+  setSyncBadge("syncing","저장 중...");
+  const ok = await saveToGist();
+  setSyncBadge(ok?"synced":"error", ok?"동기화됨":"저장 실패");
+  showToast(ok ? "목표 금액 저장됐습니다 ✓" : "저장 실패");
+  if (ok) renderAll();
+}
+
+async function resetAll() {
+  if (!confirm("전체 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return;
+  appData = { targets:{...DEF_TARGETS}, months:{} };
+  setSyncBadge("syncing","초기화 중...");
+  const ok = await saveToGist();
+  setSyncBadge(ok?"synced":"error", ok?"동기화됨":"오류");
+  inputVals = {};
+  showToast("초기화됐습니다");
+  renderAll();
+}
+
+// ─── 렌더링 ─────────────────────────────────────────────
+function renderAll() {
+  if (activeTab==="dash")  renderDash();
+  if (activeTab==="input") renderInput();
+  if (activeTab==="chart") renderChart();
+  if (activeTab==="set")   renderSettings();
+}
+
+function renderDash() {
+  const months  = appData.months;
+  const targets = appData.targets;
+  const mData   = months[currentMonth] || {};
+
+  const cumul = {}; CATS.forEach(c => cumul[c]=0);
+  Object.keys(months).forEach(m => {
+    const md = months[m]||{};
+    CATS.forEach(c => { cumul[c]=(cumul[c]||0)+(md[c]||0); });
+  });
+  const totalCum = CATS.reduce((s,c) => s+(cumul[c]||0), 0);
+  const isaCum   = ["나스닥","SP500","반도체"].reduce((s,c) => s+(cumul[c]||0), 0);
+
+  document.getElementById("hdr-sub").textContent = `월급 380만원 · 누적 ${fw(totalCum)}`;
+
+  document.getElementById("summ-cards").innerHTML = [
+    { l:"총 누적 투자", v:fw(totalCum),        col:"var(--accent)" },
+    { l:"ISA 누적",     v:fw(isaCum),           col:"#1baf7a" },
+    { l:"CMA 목돈",     v:fw(cumul.CMA||0),     col:"#eb6834" },
+    { l:"청년미래적금", v:fw(cumul.적금||0),    col:"#2a78d6" },
+  ].map(({ l,v,col }) => `
+    <div class="card" style="margin-bottom:0">
+      <div class="summ-lbl">${l}</div>
+      <div class="summ-val" style="color:${col}">${v}</div>
+    </div>`).join("");
+
+  const totalNow = CATS.reduce((s,c) => s+(mData[c]||0), 0);
+  const totalTgt = CATS.reduce((s,c) => s+(targets[c]||0), 0);
+  const pNow     = pbar(totalNow, totalTgt);
+  document.getElementById("total-card").innerHTML = `
+    <div class="big-total">
+      <div><div class="summ-lbl">투자 총액</div><div class="big-num">${fw(totalNow)}</div></div>
+      <div style="text-align:right">
+        <div class="summ-lbl">목표 달성률</div>
+        <div class="big-num" style="color:${pctColor(pNow)}">${pNow}%</div>
+      </div>
+    </div>
+    <div class="pbar-wrap" style="margin:10px 0 0">
+      <div class="pbar-fill" style="width:${pNow}%;background:var(--accent)"></div>
+    </div>`;
+
+  document.getElementById("dash-cats").innerHTML = CATS.map(c => {
+    const t=targets[c]||0, a=mData[c]||0, p=pbar(a,t), col=META[c].color;
+    const sub = META[c].sub ? `<div class="card-sub-txt">${META[c].sub}</div>` : "";
+    return `
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-name"><span class="dot" style="background:${col}"></span>${META[c].label}</div>${sub}</div>
+          <div class="card-right">
+            <div class="card-val" style="color:${col}">${fw(a)}</div>
+            <div class="card-meta">목표 ${fw(t)}</div>
+          </div>
+        </div>
+        <div class="pbar-wrap"><div class="pbar-fill" style="width:${p}%;background:${col}"></div></div>
+      </div>`;
+  }).join("");
+
+  const pieData = CATS.map(c => ({ name:META[c].label, val:mData[c]||0, col:META[c].color })).filter(d=>d.val>0);
+  const pieWrap = document.getElementById("pie-wrap");
+  if (pieData.length===0) { pieWrap.classList.add("hidden"); return; }
+  pieWrap.classList.remove("hidden");
+  document.getElementById("pie-legend").innerHTML = pieData.map(d =>
+    `<span class="legend-item"><span class="legend-dot" style="background:${d.col}"></span>${d.name} ${fwS(d.val)}</span>`
+  ).join("");
+  if (pieInst) pieInst.destroy();
+  const surf = getComputedStyle(document.documentElement).getPropertyValue("--surface") || "#fff";
+  pieInst = new Chart(document.getElementById("pieChart").getContext("2d"), {
+    type:"doughnut",
+    data: { labels:pieData.map(d=>d.name), datasets:[{ data:pieData.map(d=>d.val), backgroundColor:pieData.map(d=>d.col), borderWidth:2, borderColor:surf }] },
+    options: {
+      responsive:true, maintainAspectRatio:false, cutout:"55%",
+      plugins: { legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>` ${fw(ctx.raw)}` } } }
+    }
+  });
+}
+
+function renderInput() {
+  const mData = appData.months[currentMonth]||{};
+  inputVals = { ...mData };
+  document.getElementById("input-cats").innerHTML = CATS.map(c => {
+    const t=appData.targets[c]||0, a=mData[c]||0, p=pbar(a,t), col=META[c].color;
+    const sub = META[c].sub ? `<div class="card-sub-txt">${META[c].sub}</div>` : "";
+    return `
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-name"><span class="dot" style="background:${col}"></span>${META[c].label}</div>${sub}</div>
+          <div class="card-right">
+            <div class="card-val" id="ei-${c}" style="color:${col}">${fw(a)}</div>
+            <div class="card-meta">목표 ${fw(t)}</div>
+          </div>
+        </div>
+        <div class="pbar-wrap"><div class="pbar-fill" id="ep-${c}" style="width:${p}%;background:${col}"></div></div>
+        <div class="input-row">
+          <input type="number" id="inp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncInput('${c}')">
+          <span class="unit">만원</span>
+          <button class="btn-sm" onclick="fillTarget('${c}')">목표치</button>
+        </div>
+      </div>`;
+  }).join("");
+  document.getElementById("save-btn").textContent = `${dispM(currentMonth)} 저장 및 동기화`;
+}
+
+function renderChart() {
+  const months  = appData.months;
+  const sortedM = Object.keys(months).sort();
+  const ca      = document.getElementById("chart-area");
+  if (sortedM.length===0) {
+    ca.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>입력 탭에서 월별 내역을 입력하면<br>차트가 나타납니다</p></div>`;
+    return;
+  }
+  const cumul = {}; CATS.forEach(c => cumul[c]=0);
+  const labels = [];
+  const datasets = CATS.map(c => ({
+    label:META[c].label, data:[],
+    borderColor:META[c].color, backgroundColor:META[c].color+"18",
+    fill:true, tension:0.3, pointRadius:3, borderWidth:2
+  }));
+  sortedM.forEach(m => {
+    const md=months[m]||{};
+    labels.push(dispM(m).replace("년 ","\n").replace("월","월"));
+    CATS.forEach((c,i) => { cumul[c]=(cumul[c]||0)+(md[c]||0); datasets[i].data.push(cumul[c]); });
+  });
+  const targets = appData.targets;
+  const totalTgt = CATS.reduce((s,c)=>s+(targets[c]||0),0);
+  const tableRows = sortedM.map(m => {
+    const md=months[m]||{};
+    const tot=CATS.reduce((s,c)=>s+(md[c]||0),0);
+    const p=totalTgt>0?Math.round(tot/totalTgt*100):0;
+    const isCur=m===currentMonth;
+    return `<tr onclick="goMonth('${m}')">
+      <td style="color:${isCur?'var(--accent)':'var(--text)'};font-weight:${isCur?500:400}">${dispM(m)}</td>
+      <td>${fw(tot)}</td>
+      <td style="color:${pctColor(p)}">${p}%</td>
+    </tr>`;
+  }).join("");
+  const legendHTML = CATS.map(c => `<span class="legend-item"><span class="legend-dot" style="background:${META[c].color}"></span>${META[c].label}</span>`).join("");
+  ca.innerHTML = `
+    <div class="chart-card">
+      <div class="chart-lbl">카테고리별 누적 금액</div>
+      <div class="legend">${legendHTML}</div>
+      <div style="position:relative;height:220px"><canvas id="areaChart" role="img" aria-label="카테고리별 누적 투자 금액 추이 차트"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-lbl">월별 기록</div>
+      <table>
+        <thead><tr>
+          <td style="color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">월</td>
+          <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">투자액</td>
+          <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">달성률</td>
+        </tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
+  if (areaInst) areaInst.destroy();
+  areaInst = new Chart(document.getElementById("areaChart").getContext("2d"), {
+    type:"line", data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{ ticks:{ font:{size:10}, color:"#898781" }, grid:{ color:"rgba(128,128,128,0.12)" } },
+        y:{ ticks:{ font:{size:10}, color:"#898781", callback:v=>`${Math.round(v/10000)}만` }, grid:{ color:"rgba(128,128,128,0.12)" } }
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{ mode:"index", intersect:false, callbacks:{ label:ctx=>` ${ctx.dataset.label}: ${fw(ctx.raw)}` } }
+      }
+    }
+  });
+}
+
+function renderSettings() {
+  document.getElementById("set-cats").innerHTML = CATS.map(c => {
+    const t=appData.targets[c]||0;
+    return `
+      <div class="card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name"><span class="dot" style="background:${META[c].color}"></span>${META[c].label}</div>
+            <div class="setting-cur">현재 ${fw(t)}</div>
+          </div>
+          <input type="number" class="w70" id="st-${c}" value="${t/10000}" min="0" step="1">
+          <span class="unit">만원</span>
+        </div>
+      </div>`;
+  }).join("");
+  const gistId = getGistId()||"(아직 없음)";
+  document.getElementById("gist-info-card").innerHTML = `
+    <div class="summ-lbl">Gist ID</div>
+    <div style="font-size:12px;font-family:monospace;color:var(--text2);word-break:break-all;margin-top:2px">${gistId}</div>
+    ${gistId!=="(아직 없음)" ? `<div style="margin-top:8px"><a href="https://gist.github.com/${gistId}" target="_blank" style="font-size:12px;color:var(--accent)">Gist에서 원본 보기 →</a></div>` : ""}`;
+}
+
+function goMonth(m) {
+  currentMonth = m;
+  document.getElementById("month-label").textContent = dispM(m);
+  switchTab("dash");
+}
+
+// ─── 시작 ───────────────────────────────────────────────
+if (getToken()) {
+  initApp();
+} else {
+  document.getElementById("setup-screen").style.display = "flex";
+  document.getElementById("app").style.display = "none";
+}
+</script>
+</body>
+</html>
