@@ -8,251 +8,162 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #f7f7f5; --surface: #ffffff; --surface2: #f1f0ec;
-    --border: rgba(0,0,0,0.1); --border-s: rgba(0,0,0,0.18);
-    --text: #0b0b0b; --text2: #52514e; --text3: #898781;
-    --accent: #2a78d6; --accent-bg: #e6f1fb; --accent-b: rgba(42,120,214,0.3);
-    --radius: 8px;
+    --bg:#f7f7f5; --surface:#ffffff; --surface2:#f1f0ec;
+    --border:rgba(0,0,0,0.1); --border-s:rgba(0,0,0,0.18);
+    --text:#0b0b0b; --text2:#52514e; --text3:#898781;
+    --accent:#2a78d6; --accent-bg:#e6f1fb; --accent-b:rgba(42,120,214,0.3);
+    --green:#1baf7a; --green-bg:#eaf7f2;
+    --amber:#eda100; --amber-bg:#fef8e7;
+    --red:#e34948; --red-bg:#fdeaea;
+    --radius:8px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141414; --surface: #1e1e1c; --surface2: #262624;
-      --border: rgba(255,255,255,0.1); --border-s: rgba(255,255,255,0.18);
-      --text: #f0f0ee; --text2: #b0afa9; --text3: #686763;
-      --accent: #3987e5; --accent-bg: #0c1e35; --accent-b: rgba(57,135,229,0.35);
+      --bg:#141414; --surface:#1e1e1c; --surface2:#262624;
+      --border:rgba(255,255,255,0.1); --border-s:rgba(255,255,255,0.18);
+      --text:#f0f0ee; --text2:#b0afa9; --text3:#686763;
+      --accent:#3987e5; --accent-bg:#0c1e35; --accent-b:rgba(57,135,229,0.35);
+      --green-bg:#0f2a20; --amber-bg:#2a1f00; --red-bg:#2a0f0f;
     }
   }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-    background: var(--bg); color: var(--text);
-    min-height: 100vh; max-width: 480px; margin: 0 auto; padding-bottom: 40px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    background:var(--bg); color:var(--text);
+    min-height:100vh; max-width:480px; margin:0 auto; padding-bottom:40px;
   }
-
-  /* Setup screen */
   #setup-screen {
-    padding: 40px 24px;
-    display: flex; flex-direction: column; gap: 16px;
-    min-height: 100vh;
+    padding:40px 24px; display:flex; flex-direction:column; gap:16px; min-height:100vh;
   }
-  #setup-screen h2 { font-size: 18px; font-weight: 500; }
-  #setup-screen p { font-size: 13px; color: var(--text2); line-height: 1.7; }
-  .setup-step {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: 12px; padding: 14px 16px;
+  #setup-screen h2 { font-size:18px; font-weight:500; }
+  #setup-screen p  { font-size:13px; color:var(--text2); line-height:1.7; }
+  .setup-step { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .setup-step-num { font-size:11px; font-weight:500; color:var(--accent); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+  .setup-step-title { font-size:13px; font-weight:500; margin-bottom:6px; }
+  .setup-step p { font-size:12px; color:var(--text3); }
+  code { background:var(--surface2); padding:1px 5px; border-radius:4px; font-size:11px; font-family:monospace; }
+  .token-wrap { margin-top:10px; display:flex; gap:8px; }
+  .token-wrap input { flex:1; background:var(--surface2); border:0.5px solid var(--border-s); border-radius:var(--radius); color:var(--text); padding:8px 12px; font-size:13px; outline:none; font-family:monospace; }
+  #token-error { font-size:12px; color:var(--red); margin-top:6px; display:none; }
+  #app { display:none; }
+  header { padding:14px 16px 10px; border-bottom:0.5px solid var(--border); background:var(--surface); display:flex; justify-content:space-between; align-items:flex-start; }
+  header h1 { font-size:15px; font-weight:500; }
+  header p  { font-size:12px; color:var(--text3); margin-top:2px; }
+  .sync-badge { font-size:11px; padding:3px 8px; border-radius:20px; white-space:nowrap; border:0.5px solid var(--border); color:var(--text3); background:var(--surface2); transition:all .2s; }
+  .sync-badge.syncing { color:var(--accent); border-color:var(--accent-b); background:var(--accent-bg); }
+  .sync-badge.synced  { color:var(--green); border-color:rgba(27,175,122,.3); background:var(--green-bg); }
+  .sync-badge.error   { color:var(--red);   border-color:rgba(227,73,72,.3);  background:var(--red-bg);  }
+  .tabs { display:flex; background:var(--surface); border-bottom:0.5px solid var(--border); position:sticky; top:0; z-index:10; }
+  .tab-btn { flex:1; padding:10px 2px; background:none; border:none; border-bottom:2px solid transparent; color:var(--text3); font-size:11px; cursor:pointer; font-family:inherit; transition:color .15s; }
+  .tab-btn.active { border-bottom-color:var(--accent); color:var(--accent); font-weight:500; }
+  .month-nav { display:flex; align-items:center; padding:10px 16px; background:var(--surface); border-bottom:0.5px solid var(--border); }
+  .nav-btn { background:none; border:0.5px solid var(--border-s); color:var(--text2); padding:5px 12px; border-radius:var(--radius); cursor:pointer; font-size:13px; font-family:inherit; }
+  .month-label { flex:1; text-align:center; font-weight:500; font-size:14px; }
+  .body { padding:14px 16px; }
+  .slbl { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; font-weight:500; margin-bottom:10px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .card { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px; }
+  .card:last-child { margin-bottom:0; }
+  .dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; display:inline-block; }
+  .cname { font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px; }
+  .csub  { font-size:11px; color:var(--text3); margin-left:14px; }
+  .chdr  { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px; }
+  .cright { text-align:right; }
+  .cval  { font-size:14px; font-weight:500; }
+  .cmeta { font-size:11px; color:var(--text3); margin-top:1px; }
+  .pbar  { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; margin:8px 0; }
+  .pfill { height:100%; border-radius:2px; transition:width .3s; }
+  .irow  { display:flex; gap:6px; align-items:center; margin-top:6px; }
+  input[type="number"],input[type="date"],input[type="text"] {
+    flex:1; background:var(--surface2); border:0.5px solid var(--border-s);
+    border-radius:var(--radius); color:var(--text); padding:7px 10px;
+    font-size:14px; outline:none; font-family:inherit;
   }
-  .setup-step-num {
-    font-size: 11px; font-weight: 500; color: var(--accent);
-    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;
-  }
-  .setup-step-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
-  .setup-step p { font-size: 12px; color: var(--text3); }
-  code {
-    background: var(--surface2); padding: 1px 5px;
-    border-radius: 4px; font-size: 11px; font-family: monospace;
-  }
-  .token-input-wrap { margin-top: 10px; display: flex; gap: 8px; }
-  .token-input-wrap input {
-    flex: 1; background: var(--surface2);
-    border: 0.5px solid var(--border-s);
-    border-radius: var(--radius); color: var(--text);
-    padding: 8px 12px; font-size: 13px; outline: none;
-    font-family: monospace;
-  }
-  .token-input-wrap input:focus { border-color: var(--accent); }
-  #token-error { font-size: 12px; color: #e34948; margin-top: 6px; display: none; }
-
-  /* Main app */
-  #app { display: none; }
-  header {
-    padding: 14px 16px 10px;
-    border-bottom: 0.5px solid var(--border);
-    background: var(--surface);
-    display: flex; justify-content: space-between; align-items: flex-start;
-  }
-  header h1 { font-size: 15px; font-weight: 500; }
-  header p { font-size: 12px; color: var(--text3); margin-top: 2px; }
-  .sync-badge {
-    font-size: 11px; padding: 3px 8px;
-    border-radius: 20px; white-space: nowrap;
-    border: 0.5px solid var(--border); color: var(--text3);
-    background: var(--surface2);
-    transition: all 0.2s;
-  }
-  .sync-badge.syncing { color: var(--accent); border-color: var(--accent-b); background: var(--accent-bg); }
-  .sync-badge.synced  { color: #1baf7a; border-color: rgba(27,175,122,0.3); background: #eaf7f2; }
-  .sync-badge.error   { color: #e34948; border-color: rgba(227,73,72,0.3); background: #fdeaea; }
-  @media (prefers-color-scheme: dark) {
-    .sync-badge.synced { background: #0f2a20; }
-    .sync-badge.error  { background: #2a0f0f; }
-  }
-  .tabs {
-    display: flex; background: var(--surface);
-    border-bottom: 0.5px solid var(--border);
-    position: sticky; top: 0; z-index: 10;
-  }
-  .tab-btn {
-    flex: 1; padding: 10px 4px; background: none; border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--text3); font-size: 12px;
-    cursor: pointer; font-family: inherit; transition: color 0.15s;
-  }
-  .tab-btn.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 500; }
-  .month-nav {
-    display: flex; align-items: center;
-    padding: 10px 16px; background: var(--surface);
-    border-bottom: 0.5px solid var(--border);
-  }
-  .nav-btn {
-    background: none; border: 0.5px solid var(--border-s);
-    color: var(--text2); padding: 5px 12px;
-    border-radius: var(--radius); cursor: pointer; font-size: 13px; font-family: inherit;
-  }
-  .nav-btn:hover { background: var(--surface2); }
-  .month-label { flex: 1; text-align: center; font-weight: 500; font-size: 14px; }
-  .body { padding: 14px 16px; }
-  .section-label {
-    font-size: 11px; color: var(--text3);
-    text-transform: uppercase; letter-spacing: 0.05em;
-    font-weight: 500; margin-bottom: 10px;
-  }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .card {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: 12px; padding: 12px; margin-bottom: 10px;
-  }
-  .card:last-child { margin-bottom: 0; }
-  .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; display: inline-block; }
-  .card-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
-  .card-sub-txt { font-size: 11px; color: var(--text3); margin-left: 14px; }
-  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
-  .card-right { text-align: right; }
-  .card-val { font-size: 14px; font-weight: 500; }
-  .card-meta { font-size: 11px; color: var(--text3); margin-top: 1px; }
-  .pbar-wrap { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin: 8px 0; }
-  .pbar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
-  .input-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
-  input[type="number"] {
-    flex: 1; background: var(--surface2); border: 0.5px solid var(--border-s);
-    border-radius: var(--radius); color: var(--text);
-    padding: 7px 10px; font-size: 14px; outline: none; font-family: inherit;
-  }
-  input[type="number"]:focus { border-color: var(--accent); }
-  .unit { font-size: 12px; color: var(--text3); white-space: nowrap; }
-  .btn-sm {
-    background: var(--surface2); border: 0.5px solid var(--border-s);
-    color: var(--text2); padding: 7px 8px; border-radius: var(--radius);
-    cursor: pointer; font-size: 11px; font-family: inherit; white-space: nowrap;
-  }
-  .btn-primary {
-    width: 100%; background: var(--accent); border: none; color: white;
-    padding: 13px; border-radius: var(--radius);
-    font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px;
-    font-family: inherit; transition: opacity 0.15s;
-  }
-  .btn-primary:hover { opacity: 0.88; }
-  .btn-danger {
-    width: 100%; background: #fdeaea; border: 0.5px solid #f5c1c1; color: #c0392b;
-    padding: 13px; border-radius: var(--radius);
-    font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px;
-    font-family: inherit;
-  }
-  .btn-ghost {
-    width: 100%; background: var(--surface2); border: 0.5px solid var(--border-s); color: var(--text2);
-    padding: 13px; border-radius: var(--radius);
-    font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px;
-    font-family: inherit;
-  }
-  @media (prefers-color-scheme: dark) {
-    .btn-danger { background: #2a1a1a; border-color: #5a2020; color: #e87171; }
-  }
-  .info-box {
-    background: var(--accent-bg); border: 0.5px solid var(--accent-b);
-    border-radius: 12px; padding: 10px 12px;
-    font-size: 12px; color: var(--accent); margin-bottom: 12px;
-  }
-  .summ-lbl { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
-  .summ-val { font-size: 20px; font-weight: 500; }
-  .big-total { display: flex; justify-content: space-between; align-items: center; }
-  .big-num { font-size: 22px; font-weight: 500; }
-  .chart-card {
-    background: var(--surface); border: 0.5px solid var(--border);
-    border-radius: 12px; padding: 14px; margin-bottom: 12px;
-  }
-  .chart-lbl { font-size: 12px; color: var(--text3); margin-bottom: 10px; }
-  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
-  .legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  table { width: 100%; border-collapse: collapse; }
-  tr { cursor: pointer; }
-  tr:hover td { background: var(--surface2); }
-  td { padding: 9px 4px; border-bottom: 0.5px solid var(--border); font-size: 13px; }
-  td:nth-child(2) { text-align: right; color: var(--text2); }
-  td:last-child { text-align: right; font-weight: 500; }
-  .empty-state { text-align: center; padding: 40px 16px; color: var(--text3); }
-  .empty-icon { font-size: 36px; margin-bottom: 10px; }
-  .hidden { display: none !important; }
-  .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: var(--text); color: var(--bg); padding: 9px 18px;
-    border-radius: 20px; font-size: 13px; z-index: 999;
-    white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s;
-  }
-  .toast.show { opacity: 1; }
-  .mt { margin-top: 20px; }
-  .setting-row { display: flex; align-items: center; gap: 10px; }
-  .setting-info { flex: 1; }
-  .setting-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
-  .setting-cur { font-size: 11px; color: var(--text3); margin-left: 14px; }
-  input.w70 { width: 65px; flex: none; }
-  .divider { height: 0.5px; background: var(--border); margin: 20px 0; }
+  input[type="number"]:focus,input[type="date"]:focus { border-color:var(--accent); }
+  .unit { font-size:12px; color:var(--text3); white-space:nowrap; }
+  .bsm { background:var(--surface2); border:0.5px solid var(--border-s); color:var(--text2); padding:7px 8px; border-radius:var(--radius); cursor:pointer; font-size:11px; font-family:inherit; white-space:nowrap; }
+  .bprimary { width:100%; background:var(--accent); border:none; color:#fff; padding:13px; border-radius:var(--radius); font-size:14px; font-weight:500; cursor:pointer; margin-top:8px; font-family:inherit; transition:opacity .15s; }
+  .bprimary:hover { opacity:.88; }
+  .bdanger { width:100%; background:var(--red-bg); border:0.5px solid rgba(227,73,72,.3); color:var(--red); padding:13px; border-radius:var(--radius); font-size:14px; font-weight:500; cursor:pointer; margin-top:8px; font-family:inherit; }
+  .bghost  { width:100%; background:var(--surface2); border:0.5px solid var(--border-s); color:var(--text2); padding:13px; border-radius:var(--radius); font-size:14px; font-weight:500; cursor:pointer; margin-top:8px; font-family:inherit; }
+  .info-box { background:var(--accent-bg); border:0.5px solid var(--accent-b); border-radius:12px; padding:10px 12px; font-size:12px; color:var(--accent); margin-bottom:12px; }
+  .info-green { background:var(--green-bg); border:0.5px solid rgba(27,175,122,.3); border-radius:12px; padding:10px 12px; font-size:12px; color:var(--green); margin-bottom:12px; }
+  .slval { font-size:11px; color:var(--text3); margin-bottom:3px; }
+  .svval { font-size:20px; font-weight:500; }
+  .bigtot { display:flex; justify-content:space-between; align-items:center; }
+  .bignum { font-size:22px; font-weight:500; }
+  .cchart { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .clbl { font-size:12px; color:var(--text3); margin-bottom:10px; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  .lgitem { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text2); }
+  .lgdot  { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+  table { width:100%; border-collapse:collapse; }
+  tr { cursor:pointer; }
+  tr:hover td { background:var(--surface2); }
+  td { padding:9px 4px; border-bottom:0.5px solid var(--border); font-size:13px; }
+  td:nth-child(2) { text-align:right; color:var(--text2); }
+  td.tr { text-align:right; }
+  td.hl { font-weight:500; }
+  .empty { text-align:center; padding:40px 16px; color:var(--text3); }
+  .hidden { display:none !important; }
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--text); color:var(--bg); padding:9px 18px; border-radius:20px; font-size:13px; z-index:999; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .2s; }
+  .toast.show { opacity:1; }
+  .mt { margin-top:20px; }
+  .srow { display:flex; align-items:center; gap:10px; }
+  .sinf { flex:1; }
+  .sname { font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px; }
+  .scur  { font-size:11px; color:var(--text3); margin-left:14px; }
+  input.w70 { width:65px; flex:none; }
+  .divider { height:0.5px; background:var(--border); margin:20px 0; }
+  .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; font-weight:500; }
+  .badge-green { background:var(--green-bg); color:var(--green); }
+  .badge-red   { background:var(--red-bg);   color:var(--red);   }
+  .badge-amber { background:var(--amber-bg); color:var(--amber); }
+  .badge-blue  { background:var(--accent-bg); color:var(--accent); }
+  .rent-row { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:0.5px solid var(--border); }
+  .rent-chk { width:20px; height:20px; accent-color:var(--green); cursor:pointer; }
+  .dday-big { font-size:32px; font-weight:500; color:var(--accent); letter-spacing:-1px; }
+  .predict-row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:0.5px solid var(--border); }
+  .predict-row:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
 
-<!-- 최초 설정 화면 -->
 <div id="setup-screen">
   <div>
     <h2>GitHub 연동 설정</h2>
     <p style="margin-top:6px">데이터를 GitHub Gist에 저장해서 어디서든 동기화합니다. 1회만 설정하면 됩니다.</p>
   </div>
-
   <div class="setup-step">
     <div class="setup-step-num">Step 1</div>
     <div class="setup-step-title">Personal Access Token 발급</div>
-    <p>
-      GitHub → Settings → Developer settings<br>
-      → Personal access tokens → Tokens (classic)<br>
-      → Generate new token → <code>gist</code> 권한만 체크 → 생성<br><br>
-      생성된 토큰(<code>ghp_...</code>)을 복사하세요.
-    </p>
+    <p>GitHub → Settings → Developer settings<br>→ Personal access tokens → Tokens (classic)<br>→ Generate new token → <code>gist</code> 권한만 체크 → 생성<br><br>생성된 토큰(<code>ghp_...</code>)을 복사하세요.</p>
   </div>
-
   <div class="setup-step">
     <div class="setup-step-num">Step 2</div>
     <div class="setup-step-title">토큰 입력</div>
-    <p>토큰은 이 기기의 브라우저에만 저장됩니다. 파일이나 서버에 저장되지 않습니다.</p>
-    <div class="token-input-wrap">
+    <p>토큰은 이 기기의 브라우저에만 저장됩니다.</p>
+    <div class="token-wrap">
       <input type="password" id="token-inp" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-      <button class="btn-primary" style="width:auto;margin:0;padding:8px 16px" onclick="connectGist()">연결</button>
+      <button class="bprimary" style="width:auto;margin:0;padding:8px 16px" onclick="connectGist()">연결</button>
     </div>
-    <div id="token-error">토큰이 올바르지 않거나 gist 권한이 없습니다. 다시 확인해주세요.</div>
+    <div id="token-error">토큰이 올바르지 않거나 gist 권한이 없습니다.</div>
   </div>
 </div>
 
-<!-- 메인 앱 -->
 <div id="app">
   <header>
     <div>
       <h1>재테크 대시보드</h1>
       <p id="hdr-sub">월급 380만원</p>
     </div>
-    <div class="sync-badge" id="sync-badge">동기화 대기</div>
+    <div class="sync-badge" id="sync-badge">대기</div>
   </header>
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('dash')">현황</button>
     <button class="tab-btn" onclick="switchTab('input')">입력</button>
-    <button class="tab-btn" onclick="switchTab('chart')">누적차트</button>
+    <button class="tab-btn" onclick="switchTab('expense')">지출</button>
+    <button class="tab-btn" onclick="switchTab('chart')">차트</button>
     <button class="tab-btn" onclick="switchTab('set')">설정</button>
   </div>
 
@@ -264,569 +175,649 @@
 
   <!-- 현황 -->
   <div id="tab-dash" class="body">
-    <div class="section-label">전체 누적</div>
+    <div class="slbl">전체 누적</div>
     <div class="grid2" id="summ-cards"></div>
-    <div class="section-label">이번 달 현황</div>
+    <div class="slbl">이번 달 현황</div>
     <div class="card" id="total-card"></div>
     <div id="dash-cats"></div>
-    <div class="chart-card" id="pie-wrap">
-      <div class="chart-lbl">이번 달 배분</div>
+    <div class="cchart hidden" id="pie-wrap">
+      <div class="clbl">이번 달 투자 배분</div>
       <div class="legend" id="pie-legend"></div>
-      <div style="position:relative;height:180px">
-        <canvas id="pieChart" role="img" aria-label="이번 달 투자 배분 도넛 차트"></canvas>
-      </div>
+      <div style="position:relative;height:170px"><canvas id="pieChart" role="img" aria-label="투자 배분 도넛 차트"></canvas></div>
     </div>
+    <div class="slbl mt" id="extra-lbl" style="display:none">분석</div>
+    <div id="extra-cards"></div>
   </div>
 
-  <!-- 입력 -->
+  <!-- 투자 입력 -->
   <div id="tab-input" class="body hidden">
-    <div class="section-label">이번 달 실수령 월급</div>
+    <div class="slbl">이번 달 실수령 월급</div>
     <div class="card" style="margin-bottom:14px">
-      <div class="card-header" style="margin-bottom:8px">
-        <div class="card-name">실수령액</div>
-        <div class="card-right">
-          <div class="card-val" id="ei-salary" style="color:var(--accent)">0원</div>
-          <div class="card-meta">목표 380만원</div>
+      <div class="chdr" style="margin-bottom:8px">
+        <div class="cname">실수령액</div>
+        <div class="cright">
+          <div class="cval" id="ei-salary" style="color:var(--accent)">0원</div>
+          <div class="cmeta">목표 380만원</div>
         </div>
       </div>
-      <div class="input-row">
+      <div class="irow">
         <input type="number" id="inp-salary" placeholder="380" min="0" step="1" oninput="syncSalary()">
         <span class="unit">만원</span>
-        <button class="btn-sm" onclick="fillSalary()">목표치</button>
+        <button class="bsm" onclick="fillSalary()">목표치</button>
       </div>
     </div>
-    <div class="section-label">월 투자 내역 입력</div>
+    <div class="slbl">월 투자 내역</div>
     <div class="info-box">QLD + CMA 합산 50만원 기준 · 당월 상황에 따라 유동 조정</div>
     <div id="input-cats"></div>
-    <button class="btn-primary" id="save-btn" onclick="saveMonth()">저장 및 동기화</button>
+    <button class="bprimary" id="save-btn" onclick="saveMonth()">저장 및 동기화</button>
   </div>
 
-  <!-- 누적차트 -->
+  <!-- 지출 -->
+  <div id="tab-expense" class="body hidden">
+    <div class="slbl">이번 달 생활비 지출</div>
+    <div class="card" id="exp-total-card" style="margin-bottom:14px"></div>
+    <div id="exp-cats"></div>
+    <div class="cchart hidden" id="exp-pie-wrap" style="margin-top:4px">
+      <div class="clbl">지출 카테고리 비중</div>
+      <div class="legend" id="exp-legend"></div>
+      <div style="position:relative;height:170px"><canvas id="expPieChart" role="img" aria-label="지출 카테고리 도넛 차트"></canvas></div>
+    </div>
+    <button class="bprimary" id="exp-save-btn" onclick="saveExpense()">저장 및 동기화</button>
+    <div class="divider"></div>
+    <div class="slbl">월세 납부 기록</div>
+    <div class="info-green" id="rent-tax-info"></div>
+    <div class="card" id="rent-list"></div>
+  </div>
+
+  <!-- 차트 -->
   <div id="tab-chart" class="body hidden">
-    <div class="section-label">누적 투자 추이</div>
+    <div class="slbl">누적 투자 추이</div>
     <div id="chart-area"></div>
   </div>
 
   <!-- 설정 -->
   <div id="tab-set" class="body hidden">
-    <div class="section-label">월 목표 금액 설정</div>
-    <div class="info-box">QLD + CMA 합산 50만원 권장 · 두 항목은 매달 유동 조정</div>
-    <div id="set-cats"></div>
-    <button class="btn-primary" onclick="saveTargets()">목표 저장 및 동기화</button>
+    <div class="slbl">월 투자 목표</div>
+    <div class="info-box">QLD + CMA 합산 50만원 권장</div>
+    <div id="set-invest"></div>
+    <button class="bprimary" onclick="saveInvestTargets()">투자 목표 저장</button>
     <div class="divider"></div>
-    <div class="section-label">데이터 관리</div>
-    <button class="btn-ghost" onclick="forceSync()">Gist에서 다시 불러오기</button>
-    <button class="btn-danger" onclick="resetAll()">전체 초기화</button>
+    <div class="slbl">월 생활비 예산</div>
+    <div id="set-exp"></div>
+    <button class="bprimary" onclick="saveExpTargets()">생활비 예산 저장</button>
     <div class="divider"></div>
-    <div class="section-label">GitHub 연동</div>
+    <div class="slbl">기타 설정</div>
+    <div class="card">
+      <div class="srow" style="margin-bottom:10px">
+        <div class="sinf">
+          <div class="sname">청년미래적금 가입일</div>
+          <div class="scur">D-day 계산 기준</div>
+        </div>
+        <input type="month" id="st-savings-start" style="width:140px;flex:none">
+      </div>
+      <div class="srow">
+        <div class="sinf">
+          <div class="sname">월세 금액</div>
+          <div class="scur">월세 세액공제 계산용</div>
+        </div>
+        <input type="number" id="st-rent" class="w70" placeholder="40">
+        <span class="unit">만원</span>
+      </div>
+    </div>
+    <button class="bprimary" onclick="saveSettings()">설정 저장</button>
+    <div class="divider"></div>
+    <div class="slbl">데이터 관리</div>
+    <button class="bghost" onclick="forceSync()">Gist에서 다시 불러오기</button>
+    <button class="bdanger" onclick="resetAll()">전체 초기화</button>
+    <div class="divider"></div>
+    <div class="slbl">GitHub 연동</div>
     <div class="card" id="gist-info-card"></div>
-    <button class="btn-ghost" onclick="disconnectGist()">연동 해제</button>
+    <button class="bghost" onclick="disconnectGist()">연동 해제</button>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── 상수 ───────────────────────────────────────────────
-const GIST_FILE = "finance-data.json";
-const LS_TOKEN  = "fd_gh_token";
-const LS_GIST   = "fd_gh_gist_id";
+const GIST_FILE="finance-data.json", LS_TOKEN="fd_gh_token", LS_GIST="fd_gh_gist_id";
 
-const DEF_TARGETS = {
-  적금:500000, 나스닥:750000, SP500:450000,
-  반도체:300000, QLD:200000, CMA:300000
+const DEF_TARGETS={적금:500000,나스닥:750000,SP500:450000,반도체:300000,QLD:200000,CMA:300000};
+const DEF_EXP={식비:400000,교통:100000,쇼핑:200000,의료생활:100000,문화여가:100000,기타:100000};
+const DEF_SETTINGS={savingsStart:"2026-07",rentAmount:400000};
+
+const IMETA={
+  적금: {label:"청년미래적금",color:"#2a78d6",sub:""},
+  나스닥:{label:"ISA 나스닥100",color:"#1baf7a",sub:"ISA 내 보유"},
+  SP500: {label:"ISA S&P500",  color:"#3b6d11",sub:"ISA 내 보유"},
+  반도체:{label:"ISA 반도체",  color:"#eda100",sub:"ISA 내 보유"},
+  QLD:   {label:"QLD",         color:"#e34948",sub:"레버리지 ETF"},
+  CMA:   {label:"CMA 목돈",    color:"#eb6834",sub:"목돈 적립"},
 };
-const META = {
-  적금:  { label:"청년미래적금",  color:"#2a78d6", sub:"" },
-  나스닥: { label:"ISA 나스닥100", color:"#1baf7a", sub:"ISA 내 보유" },
-  SP500:  { label:"ISA S&P500",   color:"#3b6d11", sub:"ISA 내 보유" },
-  반도체: { label:"ISA 반도체",   color:"#eda100", sub:"ISA 내 보유" },
-  QLD:    { label:"QLD",          color:"#e34948", sub:"레버리지 ETF" },
-  CMA:    { label:"CMA 목돈",     color:"#eb6834", sub:"목돈 적립" },
+const EMETA={
+  식비:    {label:"식비",      color:"#e34948"},
+  교통:    {label:"교통",      color:"#2a78d6"},
+  쇼핑:    {label:"쇼핑",      color:"#eb6834"},
+  의료생활:{label:"의료/생활", color:"#1baf7a"},
+  문화여가:{label:"문화/여가", color:"#eda100"},
+  기타:    {label:"기타",      color:"#898781"},
 };
-const CATS = Object.keys(META);
+const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 
-// ─── 상태 ───────────────────────────────────────────────
-let appData = { targets: {...DEF_TARGETS}, months: {} };
-let currentMonth = getCurMonth();
-let inputVals = {};
-let activeTab  = "dash";
-let pieInst    = null;
-let areaInst   = null;
-let editTargets = {};
+let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},months:{}};
+let curMonth=getCurMonth(), inputVals={}, expVals={}, activeTab="dash";
+let pieInst=null, expPieInst=null, areaInst=null;
 
-// ─── 유틸 ───────────────────────────────────────────────
-function getCurMonth() {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
-}
-function shiftM(m, d) {
-  const [y,mo] = m.split("-").map(Number);
-  const dt = new Date(y, mo-1+d);
-  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
-}
-function dispM(m) {
-  const [y,mo] = m.split("-");
-  return `${y}년 ${parseInt(mo)}월`;
-}
-function fw(n) {
-  if (!n) return "0원";
-  if (n >= 100000000) return `${(n/100000000).toFixed(1)}억원`;
-  if (n >= 10000) return `${Math.round(n/10000)}만원`;
-  return `${n.toLocaleString()}원`;
-}
-function fwS(n) {
-  if (!n) return "0";
-  if (n >= 100000000) return `${(n/100000000).toFixed(1)}억`;
-  if (n >= 10000) return `${Math.round(n/10000)}만`;
-  return n.toLocaleString();
-}
-function pbar(a, t) { return t>0 ? Math.min(Math.round(a/t*100), 100) : 0; }
-function pctColor(p) {
-  if (p>=100) return "#1baf7a"; if (p>=70) return "#eda100"; return "var(--text3)";
-}
-function showToast(msg) {
-  const el = document.getElementById("toast");
-  el.textContent = msg; el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2200);
-}
-function setSyncBadge(state, txt) {
-  const el = document.getElementById("sync-badge");
-  el.className = `sync-badge ${state}`; el.textContent = txt;
-}
+// ── utils ──
+function getCurMonth(){const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;}
+function shiftM(m,d){const[y,mo]=m.split("-").map(Number);const dt=new Date(y,mo-1+d);return`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;}
+function dispM(m){const[y,mo]=m.split("-");return`${y}년 ${parseInt(mo)}월`;}
+function fw(n){if(!n)return"0원";if(n>=100000000)return`${(n/100000000).toFixed(1)}억원`;if(n>=10000)return`${Math.round(n/10000)}만원`;return`${n.toLocaleString()}원`;}
+function fwS(n){if(!n)return"0";if(n>=100000000)return`${(n/100000000).toFixed(1)}억`;if(n>=10000)return`${Math.round(n/10000)}만`;return n.toLocaleString();}
+function pb(a,t){return t>0?Math.min(Math.round(a/t*100),100):0;}
+function pcol(p){return p>=100?"var(--green)":p>=70?"var(--amber)":"var(--text3)";}
+function showToast(msg){const el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2200);}
+function setSB(s,t){const el=document.getElementById("sync-badge");el.className=`sync-badge ${s}`;el.textContent=t;}
 
-// ─── GitHub Gist API ────────────────────────────────────
-function getToken()  { return localStorage.getItem(LS_TOKEN); }
-function getGistId() { return localStorage.getItem(LS_GIST); }
+// ── Gist API ──
+const getToken=()=>localStorage.getItem(LS_TOKEN);
+const getGistId=()=>localStorage.getItem(LS_GIST);
 
-async function createGist(token) {
-  const res = await fetch("https://api.github.com/gists", {
-    method: "POST",
-    headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      description: "승민 재테크 대시보드 데이터",
-      public: false,
-      files: { [GIST_FILE]: { content: JSON.stringify(appData, null, 2) } }
-    })
+async function createGist(token){
+  const res=await fetch("https://api.github.com/gists",{
+    method:"POST",headers:{Authorization:`token ${token}`,"Content-Type":"application/json"},
+    body:JSON.stringify({description:"승민 재테크 대시보드",public:false,files:{[GIST_FILE]:{content:JSON.stringify(appData,null,2)}}})
   });
-  if (!res.ok) return null;
-  const data = await res.json();
-  localStorage.setItem(LS_GIST, data.id);
-  return data.id;
+  if(!res.ok)return null;
+  const d=await res.json();localStorage.setItem(LS_GIST,d.id);return d.id;
 }
-
-async function loadFromGist() {
-  const token = getToken(); if (!token) return false;
-  let gistId = getGistId();
-  if (!gistId) {
-    gistId = await createGist(token);
-    if (!gistId) return false;
-    return true;
-  }
-  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
-    headers: { Authorization: `token ${token}` }
-  });
-  if (!res.ok) return false;
-  const data = await res.json();
-  const content = data.files?.[GIST_FILE]?.content;
-  if (content) { appData = JSON.parse(content); return true; }
+async function loadFromGist(){
+  const token=getToken();if(!token)return false;
+  let gid=getGistId();
+  if(!gid){gid=await createGist(token);return!!gid;}
+  const res=await fetch(`https://api.github.com/gists/${gid}`,{headers:{Authorization:`token ${token}`}});
+  if(!res.ok)return false;
+  const d=await res.json();
+  const c=d.files?.[GIST_FILE]?.content;
+  if(c){appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},months:{},...JSON.parse(c)};return true;}
   return false;
 }
-
-async function saveToGist() {
-  const token = getToken(); if (!token) return false;
-  let gistId = getGistId();
-  if (!gistId) {
-    gistId = await createGist(token);
-    if (!gistId) return false;
-    return true;
-  }
-  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
-    method: "PATCH",
-    headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(appData, null, 2) } } })
+async function saveToGist(){
+  const token=getToken();if(!token)return false;
+  let gid=getGistId();
+  if(!gid){gid=await createGist(token);if(!gid)return false;return true;}
+  const res=await fetch(`https://api.github.com/gists/${gid}`,{
+    method:"PATCH",headers:{Authorization:`token ${token}`,"Content-Type":"application/json"},
+    body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(appData,null,2)}}})
   });
   return res.ok;
 }
+async function validateToken(t){const r=await fetch("https://api.github.com/gists?per_page=1",{headers:{Authorization:`token ${t}`}});return r.ok;}
 
-async function validateToken(token) {
-  const res = await fetch("https://api.github.com/gists?per_page=1", {
-    headers: { Authorization: `token ${token}` }
-  });
-  return res.ok;
+// ── 연동 설정 ──
+async function connectGist(){
+  const token=document.getElementById("token-inp").value.trim();if(!token)return;
+  document.getElementById("token-error").style.display="none";
+  setSB("syncing","확인 중...");
+  const btn=document.querySelector("#setup-screen .bprimary");btn.textContent="확인 중...";btn.disabled=true;
+  const valid=await validateToken(token);
+  if(!valid){document.getElementById("token-error").style.display="block";btn.textContent="연결";btn.disabled=false;return;}
+  localStorage.setItem(LS_TOKEN,token);await initApp();
+}
+async function disconnectGist(){
+  if(!confirm("연동을 해제합니다. (Gist 데이터는 유지됩니다)"))return;
+  localStorage.removeItem(LS_TOKEN);localStorage.removeItem(LS_GIST);
+  document.getElementById("app").style.display="none";
+  document.getElementById("setup-screen").style.display="flex";
+}
+async function forceSync(){
+  setSB("syncing","동기화 중...");
+  const ok=await loadFromGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"오류");
+  if(ok){renderAll();showToast("Gist에서 불러왔습니다 ✓");}else showToast("불러오기 실패");
+}
+async function initApp(){
+  document.getElementById("setup-screen").style.display="none";
+  document.getElementById("app").style.display="block";
+  setSB("syncing","동기화 중...");
+  document.getElementById("month-label").textContent=dispM(curMonth);
+  const ok=await loadFromGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"오프라인");
+  renderAll();
 }
 
-// ─── 연동 설정 ──────────────────────────────────────────
-async function connectGist() {
-  const token = document.getElementById("token-inp").value.trim();
-  if (!token) return;
-  const errEl = document.getElementById("token-error");
-  errEl.style.display = "none";
-  setSyncBadge("syncing", "확인 중...");
-  const btn = document.querySelector("#setup-screen .btn-primary");
-  btn.textContent = "확인 중..."; btn.disabled = true;
-  const valid = await validateToken(token);
-  if (!valid) {
-    errEl.style.display = "block";
-    btn.textContent = "연결"; btn.disabled = false;
-    return;
+// ── 월 이동 ──
+function shiftMonth(d){curMonth=shiftM(curMonth,d);document.getElementById("month-label").textContent=dispM(curMonth);renderAll();}
+
+// ── 탭 ──
+function switchTab(t){
+  const tabs=["dash","input","expense","chart","set"];
+  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",tabs[i]===t));
+  tabs.forEach(id=>document.getElementById(`tab-${id}`).classList.toggle("hidden",id!==t));
+  activeTab=t;renderAll();
+}
+
+// ── 입력 sync ──
+function syncSalary(){const v=(parseFloat(document.getElementById("inp-salary").value)||0)*10000;inputVals.salary=v;const el=document.getElementById("ei-salary");if(el)el.textContent=fw(v);}
+function fillSalary(){const el=document.getElementById("inp-salary");if(el){el.value=380;syncSalary();}}
+function syncInv(c){const el=document.getElementById(`inp-${c}`);const v=(parseFloat(el.value)||0)*10000;inputVals[c]=v;const t=appData.targets[c]||0;const ei=document.getElementById(`ei-${c}`);const ep=document.getElementById(`ep-${c}`);if(ei)ei.textContent=fw(v);if(ep)ep.style.width=`${pb(v,t)}%`;}
+function fillInv(c){const t=appData.targets[c]||0;const el=document.getElementById(`inp-${c}`);if(el){el.value=t/10000;syncInv(c);}}
+function syncExp(c){const el=document.getElementById(`exp-${c}`);const v=(parseFloat(el.value)||0)*10000;expVals[c]=v;const t=(appData.expTargets||DEF_EXP)[c]||0;const ei=document.getElementById(`eei-${c}`);const ep=document.getElementById(`eep-${c}`);if(ei)ei.textContent=fw(v);if(ep)ep.style.width=`${pb(v,t)}%`;updateExpTotal();}
+function fillExp(c){const t=(appData.expTargets||DEF_EXP)[c]||0;const el=document.getElementById(`exp-${c}`);if(el){el.value=t/10000;syncExp(c);}}
+
+function updateExpTotal(){
+  const tot=ECATS.reduce((s,c)=>s+(expVals[c]||0),0);
+  const bgt=ECATS.reduce((s,c)=>s+((appData.expTargets||DEF_EXP)[c]||0),0);
+  const p=pb(tot,bgt);
+  const el=document.getElementById("exp-total-card");
+  if(el)el.innerHTML=buildExpTotalHTML(tot,bgt,p);
+}
+
+// ── 저장 ──
+async function saveMonth(){
+  appData.months[curMonth]={...appData.months[curMonth],...inputVals};
+  setSB("syncing","저장 중...");
+  const btn=document.getElementById("save-btn");btn.textContent="저장 중...";btn.disabled=true;
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  btn.textContent="저장 및 동기화";btn.disabled=false;
+  showToast(ok?`${dispM(curMonth)} 저장됐습니다 ✓`:"저장 실패");
+  if(ok)switchTab("dash");
+}
+async function saveExpense(){
+  const rentPaid=document.getElementById("rent-paid-cur")?.checked;
+  appData.months[curMonth]={...appData.months[curMonth],expenses:{...expVals},rentPaid:!!rentPaid};
+  setSB("syncing","저장 중...");
+  const btn=document.getElementById("exp-save-btn");btn.textContent="저장 중...";btn.disabled=true;
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  btn.textContent="저장 및 동기화";btn.disabled=false;
+  showToast(ok?`${dispM(curMonth)} 지출 저장됐습니다 ✓`:"저장 실패");
+  if(ok)switchTab("dash");
+}
+async function saveInvestTargets(){
+  ICATS.forEach(c=>{const el=document.getElementById(`st-${c}`);if(el){const v=(parseFloat(el.value)||0)*10000;if(v>0)appData.targets[c]=v;}});
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  showToast(ok?"투자 목표 저장됐습니다 ✓":"저장 실패");
+  if(ok)renderAll();
+}
+async function saveExpTargets(){
+  if(!appData.expTargets)appData.expTargets={...DEF_EXP};
+  ECATS.forEach(c=>{const el=document.getElementById(`et-${c}`);if(el){const v=(parseFloat(el.value)||0)*10000;if(v>0)appData.expTargets[c]=v;}});
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  showToast(ok?"생활비 예산 저장됐습니다 ✓":"저장 실패");
+  if(ok)renderAll();
+}
+async function saveSettings(){
+  if(!appData.settings)appData.settings={...DEF_SETTINGS};
+  const ss=document.getElementById("st-savings-start")?.value;
+  const rent=(parseFloat(document.getElementById("st-rent")?.value)||0)*10000;
+  if(ss)appData.settings.savingsStart=ss;
+  if(rent>0)appData.settings.rentAmount=rent;
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  showToast(ok?"설정 저장됐습니다 ✓":"저장 실패");
+}
+async function resetAll(){
+  if(!confirm("전체 데이터를 초기화하시겠습니까?"))return;
+  appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},months:{}};
+  setSB("syncing","초기화 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"오류");
+  inputVals={};expVals={};showToast("초기화됐습니다");renderAll();
+}
+
+// ── 렌더링 ──
+function renderAll(){
+  if(activeTab==="dash")   renderDash();
+  if(activeTab==="input")  renderInput();
+  if(activeTab==="expense")renderExpense();
+  if(activeTab==="chart")  renderChart();
+  if(activeTab==="set")    renderSettings();
+}
+
+// ── D-day 계산 ──
+function calcDday(){
+  const start=appData.settings?.savingsStart||"2026-07";
+  const[sy,sm]=start.split("-").map(Number);
+  const maturity=new Date(sy+3,sm-1,1);
+  const today=new Date();
+  const diff=Math.ceil((maturity-today)/(1000*60*60*24));
+  return{diff,maturityStr:`${sy+3}년 ${sm}월`};
+}
+
+// ── 연말정산 예측 ──
+function calcTaxRefund(){
+  const months=appData.months;
+  const curYear=new Date().getFullYear();
+  const rentPerMonth=appData.settings?.rentAmount||400000;
+  let rentPaidMonths=0;
+  Object.keys(months).forEach(m=>{
+    if(m.startsWith(String(curYear))&&months[m].rentPaid)rentPaidMonths++;
+  });
+  const rentTotal=rentPerMonth*rentPaidMonths;
+  const rentRefund=Math.round(rentTotal*0.15);
+  return{rentPaidMonths,rentTotal,rentRefund};
+}
+
+// ── 비상금 달성 예측 ──
+function calcSavingsGoal(){
+  const months=appData.months;
+  const sortedM=Object.keys(months).sort();
+  let cmaCum=0;
+  sortedM.forEach(m=>{cmaCum+=(months[m]?.CMA||0);});
+  const goal=5000000;
+  const remaining=Math.max(0,goal-cmaCum);
+  const monthlyTarget=appData.targets.CMA||300000;
+  const monthsLeft=monthlyTarget>0?Math.ceil(remaining/monthlyTarget):null;
+  let goalDate=null;
+  if(monthsLeft!==null){
+    const[y,mo]=curMonth.split("-").map(Number);
+    const dt=new Date(y,mo-1+monthsLeft);
+    goalDate=`${dt.getFullYear()}년 ${dt.getMonth()+1}월`;
   }
-  localStorage.setItem(LS_TOKEN, token);
-  await initApp();
+  return{cmaCum,remaining,monthsLeft,goalDate,pct:pb(cmaCum,goal)};
 }
 
-async function disconnectGist() {
-  if (!confirm("연동을 해제하면 이 기기에서 동기화가 중단됩니다. (Gist 데이터는 삭제되지 않습니다)")) return;
-  localStorage.removeItem(LS_TOKEN);
-  localStorage.removeItem(LS_GIST);
-  document.getElementById("app").style.display = "none";
-  document.getElementById("setup-screen").style.display = "flex";
+function buildExpTotalHTML(tot,bgt,p){
+  const remain=bgt-tot;
+  return`<div class="bigtot">
+    <div><div class="slval">이번 달 지출</div><div class="bignum">${fw(tot)}</div></div>
+    <div style="text-align:right">
+      <div class="slval">${remain>=0?'남은 예산':'예산 초과'}</div>
+      <div class="bignum" style="color:${remain>=0?'var(--green)':'var(--red)'}">${fw(Math.abs(remain))}</div>
+    </div>
+  </div>
+  <div class="pbar" style="margin:10px 0 0"><div class="pfill" style="width:${p}%;background:${p>=100?'var(--red)':'var(--accent)'}"></div></div>`;
 }
 
-async function forceSync() {
-  setSyncBadge("syncing", "동기화 중...");
-  const ok = await loadFromGist();
-  if (ok) { setSyncBadge("synced", "동기화됨"); renderAll(); showToast("Gist에서 불러왔습니다 ✓"); }
-  else     { setSyncBadge("error", "오류"); showToast("불러오기 실패"); }
-}
+function renderDash(){
+  const months=appData.months, targets=appData.targets;
+  const mData=months[curMonth]||{};
+  const cumul={}; ICATS.forEach(c=>cumul[c]=0);
+  Object.keys(months).forEach(m=>{const md=months[m]||{};ICATS.forEach(c=>{cumul[c]=(cumul[c]||0)+(md[c]||0);});});
+  const totalCum=ICATS.reduce((s,c)=>s+(cumul[c]||0),0);
+  const isaCum=["나스닥","SP500","반도체"].reduce((s,c)=>s+(cumul[c]||0),0);
 
-// ─── 앱 초기화 ──────────────────────────────────────────
-async function initApp() {
-  document.getElementById("setup-screen").style.display = "none";
-  document.getElementById("app").style.display = "block";
-  setSyncBadge("syncing", "동기화 중...");
-  document.getElementById("month-label").textContent = dispM(currentMonth);
-  const ok = await loadFromGist();
-  setSyncBadge(ok ? "synced" : "error", ok ? "동기화됨" : "오프라인");
-  renderAll();
-}
+  document.getElementById("hdr-sub").textContent=`월급 380만원 · 누적 ${fw(totalCum)}`;
+  document.getElementById("summ-cards").innerHTML=[
+    {l:"총 누적 투자",v:fw(totalCum),col:"var(--accent)"},
+    {l:"ISA 누적",    v:fw(isaCum),  col:"var(--green)"},
+    {l:"CMA 목돈",   v:fw(cumul.CMA||0), col:"#eb6834"},
+    {l:"청년미래적금",v:fw(cumul.적금||0),col:"#2a78d6"},
+  ].map(({l,v,col})=>`<div class="card" style="margin-bottom:0"><div class="slval">${l}</div><div class="svval" style="color:${col}">${v}</div></div>`).join("");
 
-// ─── 월 이동 ────────────────────────────────────────────
-function shiftMonth(d) {
-  currentMonth = shiftM(currentMonth, d);
-  document.getElementById("month-label").textContent = dispM(currentMonth);
-  renderAll();
-}
+  const totalNow=ICATS.reduce((s,c)=>s+(mData[c]||0),0);
+  const totalTgt=ICATS.reduce((s,c)=>s+(targets[c]||0),0);
+  const pNow=pb(totalNow,totalTgt);
+  const salary=mData.salary||0;
+  const remaining=salary>0?salary-totalNow:null;
+  const srate=salary>0?Math.round(totalNow/salary*100):null;
+  const salRow=salary>0?`<div style="display:flex;justify-content:space-between;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--border)">
+    <div><div class="slval">이번 달 실수령</div><div style="font-size:18px;font-weight:500;color:var(--accent)">${fw(salary)}</div></div>
+    <div style="text-align:right"><div class="slval">저축률</div><div style="font-size:18px;font-weight:500;color:${srate>=50?'var(--green)':srate>=30?'var(--amber)':'var(--text)'}">${srate}%</div></div>
+  </div>`:"";
+  document.getElementById("total-card").innerHTML=`${salRow}
+    <div class="bigtot">
+      <div><div class="slval">투자 총액</div><div class="bignum">${fw(totalNow)}</div></div>
+      <div style="text-align:right"><div class="slval">${remaining!==null?'남은 돈':'목표 달성률'}</div>
+      <div class="bignum" style="color:${remaining!==null?(remaining>=0?'var(--text)':'var(--red)'):pcol(pNow)}">${remaining!==null?fw(remaining):pNow+'%'}</div></div>
+    </div>
+    <div class="pbar" style="margin:10px 0 0"><div class="pfill" style="width:${pNow}%;background:var(--accent)"></div></div>`;
 
-// ─── 탭 전환 ────────────────────────────────────────────
-function switchTab(t) {
-  document.querySelectorAll(".tab-btn").forEach((b,i) => {
-    b.classList.toggle("active", ["dash","input","chart","set"][i] === t);
-  });
-  ["dash","input","chart","set"].forEach(id => {
-    document.getElementById(`tab-${id}`).classList.toggle("hidden", id !== t);
-  });
-  activeTab = t;
-  renderAll();
-}
+  document.getElementById("dash-cats").innerHTML=ICATS.map(c=>{
+    const t=targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
+    const sub=IMETA[c].sub?`<div class="csub">${IMETA[c].sub}</div>`:"";
+    return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${col}"></div></div></div>`;
+  }).join("");
 
-// ─── 입력 동기화 ────────────────────────────────────────
-function syncSalary() {
-  const el = document.getElementById("inp-salary");
-  const v = (parseFloat(el.value)||0) * 10000;
-  inputVals.salary = v;
-  const ei = document.getElementById("ei-salary");
-  if (ei) ei.textContent = fw(v);
-}
-function fillSalary() {
-  const el = document.getElementById("inp-salary");
-  if (el) { el.value = 380; syncSalary(); }
-}
+  const pieData=ICATS.map(c=>({name:IMETA[c].label,val:mData[c]||0,col:IMETA[c].color})).filter(d=>d.val>0);
+  const pw=document.getElementById("pie-wrap");
+  if(pieData.length===0){pw.classList.add("hidden");}else{
+    pw.classList.remove("hidden");
+    document.getElementById("pie-legend").innerHTML=pieData.map(d=>`<span class="lgitem"><span class="lgdot" style="background:${d.col}"></span>${d.name} ${fwS(d.val)}</span>`).join("");
+    if(pieInst)pieInst.destroy();
+    const surf=getComputedStyle(document.documentElement).getPropertyValue("--surface")||"#fff";
+    pieInst=new Chart(document.getElementById("pieChart").getContext("2d"),{
+      type:"doughnut",
+      data:{labels:pieData.map(d=>d.name),datasets:[{data:pieData.map(d=>d.val),backgroundColor:pieData.map(d=>d.col),borderWidth:2,borderColor:surf}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${fw(ctx.raw)}`}}}}
+    });
+  }
 
-function syncInput(cat) {
-  const el = document.getElementById(`inp-${cat}`);
-  const v = (parseFloat(el.value)||0) * 10000;
-  inputVals[cat] = v;
-  const t = appData.targets[cat]||0;
-  const p = pbar(v,t);
-  const ei = document.getElementById(`ei-${cat}`);
-  const ep = document.getElementById(`ep-${cat}`);
-  if (ei) ei.textContent = fw(v);
-  if (ep) ep.style.width = `${p}%`;
-}
-function fillTarget(cat) {
-  const t = appData.targets[cat]||0;
-  const el = document.getElementById(`inp-${cat}`);
-  if (el) { el.value = t/10000; syncInput(cat); }
-}
+  // 분석 카드
+  const dday=calcDday();
+  const tax=calcTaxRefund();
+  const goal=calcSavingsGoal();
+  const expData=mData.expenses||{};
+  const expTotal=ECATS.reduce((s,c)=>s+(expData[c]||0),0);
+  const expBgt=ECATS.reduce((s,c)=>s+((appData.expTargets||DEF_EXP)[c]||0),0);
 
-// ─── 저장 ───────────────────────────────────────────────
-async function saveMonth() {
-  appData.months[currentMonth] = { ...inputVals };
-  setSyncBadge("syncing", "저장 중...");
-  const btn = document.getElementById("save-btn");
-  btn.textContent = "저장 중..."; btn.disabled = true;
-  const ok = await saveToGist();
-  setSyncBadge(ok?"synced":"error", ok?"동기화됨":"저장 실패");
-  btn.textContent = "저장 및 동기화"; btn.disabled = false;
-  showToast(ok ? `${dispM(currentMonth)} 저장됐습니다 ✓` : "저장 실패. 인터넷 연결을 확인하세요");
-  if (ok) switchTab("dash");
-}
-
-async function saveTargets() {
-  CATS.forEach(c => {
-    const el = document.getElementById(`st-${c}`);
-    if (el) { const v=(parseFloat(el.value)||0)*10000; if(v>0) appData.targets[c]=v; }
-  });
-  setSyncBadge("syncing","저장 중...");
-  const ok = await saveToGist();
-  setSyncBadge(ok?"synced":"error", ok?"동기화됨":"저장 실패");
-  showToast(ok ? "목표 금액 저장됐습니다 ✓" : "저장 실패");
-  if (ok) renderAll();
-}
-
-async function resetAll() {
-  if (!confirm("전체 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return;
-  appData = { targets:{...DEF_TARGETS}, months:{} };
-  setSyncBadge("syncing","초기화 중...");
-  const ok = await saveToGist();
-  setSyncBadge(ok?"synced":"error", ok?"동기화됨":"오류");
-  inputVals = {};
-  showToast("초기화됐습니다");
-  renderAll();
-}
-
-// ─── 렌더링 ─────────────────────────────────────────────
-function renderAll() {
-  if (activeTab==="dash")  renderDash();
-  if (activeTab==="input") renderInput();
-  if (activeTab==="chart") renderChart();
-  if (activeTab==="set")   renderSettings();
-}
-
-function renderDash() {
-  const months  = appData.months;
-  const targets = appData.targets;
-  const mData   = months[currentMonth] || {};
-
-  const cumul = {}; CATS.forEach(c => cumul[c]=0);
-  Object.keys(months).forEach(m => {
-    const md = months[m]||{};
-    CATS.forEach(c => { cumul[c]=(cumul[c]||0)+(md[c]||0); });
-  });
-  const totalCum = CATS.reduce((s,c) => s+(cumul[c]||0), 0);
-  const isaCum   = ["나스닥","SP500","반도체"].reduce((s,c) => s+(cumul[c]||0), 0);
-
-  document.getElementById("hdr-sub").textContent = `월급 380만원 · 누적 ${fw(totalCum)}`;
-
-  document.getElementById("summ-cards").innerHTML = [
-    { l:"총 누적 투자", v:fw(totalCum),        col:"var(--accent)" },
-    { l:"ISA 누적",     v:fw(isaCum),           col:"#1baf7a" },
-    { l:"CMA 목돈",     v:fw(cumul.CMA||0),     col:"#eb6834" },
-    { l:"청년미래적금", v:fw(cumul.적금||0),    col:"#2a78d6" },
-  ].map(({ l,v,col }) => `
-    <div class="card" style="margin-bottom:0">
-      <div class="summ-lbl">${l}</div>
-      <div class="summ-val" style="color:${col}">${v}</div>
-    </div>`).join("");
-
-  const totalNow = CATS.reduce((s,c) => s+(mData[c]||0), 0);
-  const totalTgt = CATS.reduce((s,c) => s+(targets[c]||0), 0);
-  const pNow     = pbar(totalNow, totalTgt);
-  const salary   = mData.salary || 0;
-  const remaining = salary > 0 ? salary - totalNow : null;
-  const savingRate = salary > 0 ? Math.round(totalNow/salary*100) : null;
-
-  const salaryRow = salary > 0 ? `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--border)">
-      <div>
-        <div class="summ-lbl">이번 달 실수령</div>
-        <div style="font-size:18px;font-weight:500;color:var(--accent)">${fw(salary)}</div>
-      </div>
-      <div style="text-align:right">
-        <div class="summ-lbl">저축률</div>
-        <div style="font-size:18px;font-weight:500;color:${savingRate>=50?'#1baf7a':savingRate>=30?'#eda100':'var(--text)'}">${savingRate}%</div>
-      </div>
-    </div>` : "";
-
-  document.getElementById("total-card").innerHTML = `
-    ${salaryRow}
-    <div class="big-total">
-      <div><div class="summ-lbl">투자 총액</div><div class="big-num">${fw(totalNow)}</div></div>
-      <div style="text-align:right">
-        <div class="summ-lbl">${remaining!==null ? '남은 돈' : '목표 달성률'}</div>
-        <div class="big-num" style="color:${remaining!==null ? (remaining>=0?'var(--text)':'#e34948') : pctColor(pNow)}">
-          ${remaining!==null ? fw(remaining) : pNow+'%'}
+  const showExtra=true;
+  document.getElementById("extra-lbl").style.display="block";
+  document.getElementById("extra-cards").innerHTML=`
+    <!-- D-day -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="slval">청년미래적금 만기 D-day</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <div>
+          <div class="dday-big">D-${Math.max(0,dday.diff).toLocaleString()}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">만기 ${dday.maturityStr}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="slval">누적 납입</div>
+          <div style="font-size:16px;font-weight:500;color:var(--accent)">${fw(cumul.적금||0)}</div>
+          <div class="pbar" style="width:120px;margin:6px 0 0"><div class="pfill" style="width:${pb(cumul.적금||0,2200*10000)}%;background:var(--accent)"></div></div>
+          <div style="font-size:11px;color:var(--text3)">목표 2,200만원</div>
         </div>
       </div>
     </div>
-    <div class="pbar-wrap" style="margin:10px 0 0">
-      <div class="pbar-fill" style="width:${pNow}%;background:var(--accent)"></div>
-    </div>`;
-
-  document.getElementById("dash-cats").innerHTML = CATS.map(c => {
-    const t=targets[c]||0, a=mData[c]||0, p=pbar(a,t), col=META[c].color;
-    const sub = META[c].sub ? `<div class="card-sub-txt">${META[c].sub}</div>` : "";
-    return `
-      <div class="card">
-        <div class="card-header">
-          <div><div class="card-name"><span class="dot" style="background:${col}"></span>${META[c].label}</div>${sub}</div>
-          <div class="card-right">
-            <div class="card-val" style="color:${col}">${fw(a)}</div>
-            <div class="card-meta">목표 ${fw(t)}</div>
-          </div>
+    <!-- 연말정산 예측 -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="slval">연말정산 예측 (${new Date().getFullYear()}년)</div>
+      <div style="margin-top:8px">
+        <div class="predict-row">
+          <span style="color:var(--text2)">월세 납부 확인 월수</span>
+          <span style="font-weight:500">${tax.rentPaidMonths}개월</span>
         </div>
-        <div class="pbar-wrap"><div class="pbar-fill" style="width:${p}%;background:${col}"></div></div>
-      </div>`;
-  }).join("");
-
-  const pieData = CATS.map(c => ({ name:META[c].label, val:mData[c]||0, col:META[c].color })).filter(d=>d.val>0);
-  const pieWrap = document.getElementById("pie-wrap");
-  if (pieData.length===0) { pieWrap.classList.add("hidden"); return; }
-  pieWrap.classList.remove("hidden");
-  document.getElementById("pie-legend").innerHTML = pieData.map(d =>
-    `<span class="legend-item"><span class="legend-dot" style="background:${d.col}"></span>${d.name} ${fwS(d.val)}</span>`
-  ).join("");
-  if (pieInst) pieInst.destroy();
-  const surf = getComputedStyle(document.documentElement).getPropertyValue("--surface") || "#fff";
-  pieInst = new Chart(document.getElementById("pieChart").getContext("2d"), {
-    type:"doughnut",
-    data: { labels:pieData.map(d=>d.name), datasets:[{ data:pieData.map(d=>d.val), backgroundColor:pieData.map(d=>d.col), borderWidth:2, borderColor:surf }] },
-    options: {
-      responsive:true, maintainAspectRatio:false, cutout:"55%",
-      plugins: { legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>` ${fw(ctx.raw)}` } } }
-    }
-  });
+        <div class="predict-row">
+          <span style="color:var(--text2)">연간 납부 월세 합계</span>
+          <span style="font-weight:500">${fw(tax.rentTotal)}</span>
+        </div>
+        <div class="predict-row">
+          <span style="color:var(--text2)">월세 세액공제 예상 (15%)</span>
+          <span style="font-weight:500;color:var(--green)">약 ${fw(tax.rentRefund)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">지출 탭에서 월세 납부 확인 시 자동 계산됩니다</div>
+      </div>
+    </div>
+    <!-- 비상금 달성 예측 -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="slval">비상금 목표 달성 예측</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 6px">
+        <span style="font-size:13px;color:var(--text2)">CMA 누적</span>
+        <span style="font-size:15px;font-weight:500">${fw(goal.cmaCum)} <span style="font-size:12px;color:var(--text3)">/ 500만원</span></span>
+      </div>
+      <div class="pbar"><div class="pfill" style="width:${goal.pct}%;background:var(--amber)"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        ${goal.pct>=100
+          ?`<span class="badge badge-green">목표 달성 완료 ✓</span>`
+          :`<span style="font-size:12px;color:var(--text3)">예상 달성: <strong>${goal.goalDate||"—"}</strong></span>
+            <span style="font-size:12px;color:var(--text3)">남은 금액 ${fw(goal.remaining)}</span>`
+        }
+      </div>
+    </div>
+    <!-- 이달 지출 요약 -->
+    ${expTotal>0?`<div class="card" style="margin-bottom:0">
+      <div class="slval">이번 달 생활비</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0">
+        <div class="bignum" style="font-size:18px">${fw(expTotal)}</div>
+        <span class="badge ${expTotal>expBgt?'badge-red':'badge-green'}">${expTotal>expBgt?'예산 초과':'예산 내'}</span>
+      </div>
+      <div class="pbar"><div class="pfill" style="width:${Math.min(pb(expTotal,expBgt),100)}%;background:${expTotal>expBgt?'var(--red)':'var(--green)'}"></div></div>
+    </div>`:""}
+  `;
 }
 
-function renderInput() {
-  const mData = appData.months[currentMonth]||{};
-  inputVals = { ...mData };
-  const sal = mData.salary||0;
-  const salInp = document.getElementById("inp-salary");
-  const salEi  = document.getElementById("ei-salary");
-  if (salInp) salInp.value = sal>0 ? sal/10000 : "";
-  if (salEi)  salEi.textContent = fw(sal);
-  document.getElementById("input-cats").innerHTML = CATS.map(c => {
-    const t=appData.targets[c]||0, a=mData[c]||0, p=pbar(a,t), col=META[c].color;
-    const sub = META[c].sub ? `<div class="card-sub-txt">${META[c].sub}</div>` : "";
-    return `
-      <div class="card">
-        <div class="card-header">
-          <div><div class="card-name"><span class="dot" style="background:${col}"></span>${META[c].label}</div>${sub}</div>
-          <div class="card-right">
-            <div class="card-val" id="ei-${c}" style="color:${col}">${fw(a)}</div>
-            <div class="card-meta">목표 ${fw(t)}</div>
-          </div>
-        </div>
-        <div class="pbar-wrap"><div class="pbar-fill" id="ep-${c}" style="width:${p}%;background:${col}"></div></div>
-        <div class="input-row">
-          <input type="number" id="inp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncInput('${c}')">
-          <span class="unit">만원</span>
-          <button class="btn-sm" onclick="fillTarget('${c}')">목표치</button>
-        </div>
-      </div>`;
+function renderInput(){
+  const mData=appData.months[curMonth]||{};
+  inputVals={...mData};
+  const sal=mData.salary||0;
+  const si=document.getElementById("inp-salary"),se=document.getElementById("ei-salary");
+  if(si)si.value=sal>0?sal/10000:"";
+  if(se)se.textContent=fw(sal);
+  document.getElementById("input-cats").innerHTML=ICATS.map(c=>{
+    const t=appData.targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
+    const sub=IMETA[c].sub?`<div class="csub">${IMETA[c].sub}</div>`:"";
+    return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" id="ei-${c}" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" id="ep-${c}" style="width:${p}%;background:${col}"></div></div><div class="irow"><input type="number" id="inp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncInv('${c}')"><span class="unit">만원</span><button class="bsm" onclick="fillInv('${c}')">목표치</button></div></div>`;
   }).join("");
-  document.getElementById("save-btn").textContent = `${dispM(currentMonth)} 저장 및 동기화`;
+  document.getElementById("save-btn").textContent=`${dispM(curMonth)} 저장 및 동기화`;
 }
 
-function renderChart() {
-  const months  = appData.months;
-  const sortedM = Object.keys(months).sort();
-  const ca      = document.getElementById("chart-area");
-  if (sortedM.length===0) {
-    ca.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>입력 탭에서 월별 내역을 입력하면<br>차트가 나타납니다</p></div>`;
-    return;
+function renderExpense(){
+  const mData=appData.months[curMonth]||{};
+  const expData=mData.expenses||{};
+  expVals={...expData};
+  const expT=appData.expTargets||DEF_EXP;
+  const tot=ECATS.reduce((s,c)=>s+(expVals[c]||0),0);
+  const bgt=ECATS.reduce((s,c)=>s+(expT[c]||0),0);
+  const p=pb(tot,bgt);
+
+  document.getElementById("exp-total-card").innerHTML=buildExpTotalHTML(tot,bgt,p);
+
+  document.getElementById("exp-cats").innerHTML=ECATS.map(c=>{
+    const t=expT[c]||0,a=expData[c]||0,pp=pb(a,t),col=EMETA[c].color;
+    return`<div class="card"><div class="chdr"><div class="cname"><span class="dot" style="background:${col}"></span>${EMETA[c].label}</div><div class="cright"><div class="cval" id="eei-${c}" style="color:${col}">${fw(a)}</div><div class="cmeta">예산 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" id="eep-${c}" style="width:${pp}%;background:${col}"></div></div><div class="irow"><input type="number" id="exp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncExp('${c}')"><span class="unit">만원</span><button class="bsm" onclick="fillExp('${c}')">예산</button></div></div>`;
+  }).join("");
+
+  const pieData=ECATS.map(c=>({name:EMETA[c].label,val:expData[c]||0,col:EMETA[c].color})).filter(d=>d.val>0);
+  const epw=document.getElementById("exp-pie-wrap");
+  if(pieData.length===0){epw.classList.add("hidden");}else{
+    epw.classList.remove("hidden");
+    document.getElementById("exp-legend").innerHTML=pieData.map(d=>`<span class="lgitem"><span class="lgdot" style="background:${d.col}"></span>${d.name} ${fwS(d.val)}</span>`).join("");
+    if(expPieInst)expPieInst.destroy();
+    const surf=getComputedStyle(document.documentElement).getPropertyValue("--surface")||"#fff";
+    expPieInst=new Chart(document.getElementById("expPieChart").getContext("2d"),{
+      type:"doughnut",
+      data:{labels:pieData.map(d=>d.name),datasets:[{data:pieData.map(d=>d.val),backgroundColor:pieData.map(d=>d.col),borderWidth:2,borderColor:surf}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${fw(ctx.raw)}`}}}}
+    });
   }
-  const cumul = {}; CATS.forEach(c => cumul[c]=0);
-  const labels = [];
-  const datasets = CATS.map(c => ({
-    label:META[c].label, data:[],
-    borderColor:META[c].color, backgroundColor:META[c].color+"18",
-    fill:true, tension:0.3, pointRadius:3, borderWidth:2
-  }));
-  sortedM.forEach(m => {
+
+  document.getElementById("exp-save-btn").textContent=`${dispM(curMonth)} 지출 저장 및 동기화`;
+
+  // 월세 납부 기록
+  const rentAmt=appData.settings?.rentAmount||400000;
+  const curYear=new Date().getFullYear();
+  const yearMonths=Array.from({length:12},(_,i)=>`${curYear}-${String(i+1).padStart(2,"0")}`);
+  let paidCount=0;
+  const rows=yearMonths.map(m=>{
+    const md=appData.months[m]||{};
+    const paid=!!md.rentPaid;
+    if(paid)paidCount++;
+    const isCur=m===curMonth;
+    return`<div class="rent-row">
+      <span style="font-size:13px;font-weight:${isCur?500:400};color:${isCur?'var(--accent)':'var(--text)'}">${dispM(m)}</span>
+      <span style="font-size:12px;color:var(--text3)">${fw(rentAmt)}</span>
+      <input type="checkbox" class="rent-chk" ${paid?"checked":""} ${isCur?`id="rent-paid-cur"`:`onchange="toggleRent('${m}',this.checked)"`}>
+    </div>`;
+  }).join("");
+  const annualTotal=rentAmt*paidCount;
+  const taxCredit=Math.round(annualTotal*0.15);
+  document.getElementById("rent-tax-info").innerHTML=`${curYear}년 납부 확인: ${paidCount}개월 · 연간 ${fw(annualTotal)} · 예상 세액공제 <strong>${fw(taxCredit)}</strong>`;
+  document.getElementById("rent-list").innerHTML=rows;
+}
+
+async function toggleRent(m,checked){
+  if(!appData.months[m])appData.months[m]={};
+  appData.months[m].rentPaid=checked;
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  renderExpense();
+}
+
+function renderChart(){
+  const months=appData.months, sortedM=Object.keys(months).sort(), ca=document.getElementById("chart-area");
+  if(sortedM.length===0){ca.innerHTML=`<div class="empty"><div style="font-size:36px;margin-bottom:10px">📊</div><p>입력 탭에서 월별 내역을 입력하면<br>차트가 나타납니다</p></div>`;return;}
+  const cumul={};ICATS.forEach(c=>cumul[c]=0);
+  const labels=[];
+  const datasets=ICATS.map(c=>({label:IMETA[c].label,data:[],borderColor:IMETA[c].color,backgroundColor:IMETA[c].color+"18",fill:true,tension:.3,pointRadius:3,borderWidth:2}));
+  sortedM.forEach(m=>{
     const md=months[m]||{};
-    labels.push(dispM(m).replace("년 ","\n").replace("월","월"));
-    CATS.forEach((c,i) => { cumul[c]=(cumul[c]||0)+(md[c]||0); datasets[i].data.push(cumul[c]); });
+    labels.push(dispM(m).replace("년 ","년\n"));
+    ICATS.forEach((c,i)=>{cumul[c]=(cumul[c]||0)+(md[c]||0);datasets[i].data.push(cumul[c]);});
   });
-  const targets = appData.targets;
-  const totalTgt = CATS.reduce((s,c)=>s+(targets[c]||0),0);
-  const tableRows = sortedM.map(m => {
-    const md=months[m]||{};
-    const tot=CATS.reduce((s,c)=>s+(md[c]||0),0);
-    const p=totalTgt>0?Math.round(tot/totalTgt*100):0;
-    const isCur=m===currentMonth;
-    const sal=md.salary||0;
-    const salTxt=sal>0?fwS(sal):"—";
-    return `<tr onclick="goMonth('${m}')">
+  const totalTgt=ICATS.reduce((s,c)=>s+(appData.targets[c]||0),0);
+  const tableRows=sortedM.map(m=>{
+    const md=months[m]||{},tot=ICATS.reduce((s,c)=>s+(md[c]||0),0),p=totalTgt>0?Math.round(tot/totalTgt*100):0;
+    const sal=md.salary||0,expTot=ECATS.reduce((s,c)=>s+((md.expenses||{})[c]||0),0);
+    const isCur=m===curMonth;
+    return`<tr onclick="goMonth('${m}')">
       <td style="color:${isCur?'var(--accent)':'var(--text)'};font-weight:${isCur?500:400}">${dispM(m)}</td>
-      <td>${salTxt}</td>
-      <td>${fw(tot)}</td>
-      <td style="color:${pctColor(p)}">${p}%</td>
+      <td class="tr">${sal>0?fwS(sal):"—"}</td>
+      <td class="tr">${fw(tot)}</td>
+      <td class="tr">${expTot>0?fw(expTot):"—"}</td>
+      <td class="tr hl" style="color:${pcol(p)}">${p}%</td>
     </tr>`;
   }).join("");
-  const legendHTML = CATS.map(c => `<span class="legend-item"><span class="legend-dot" style="background:${META[c].color}"></span>${META[c].label}</span>`).join("");
-  ca.innerHTML = `
-    <div class="chart-card">
-      <div class="chart-lbl">카테고리별 누적 금액</div>
-      <div class="legend">${legendHTML}</div>
-      <div style="position:relative;height:220px"><canvas id="areaChart" role="img" aria-label="카테고리별 누적 투자 금액 추이 차트"></canvas></div>
+  const lgH=ICATS.map(c=>`<span class="lgitem"><span class="lgdot" style="background:${IMETA[c].color}"></span>${IMETA[c].label}</span>`).join("");
+  ca.innerHTML=`
+    <div class="cchart">
+      <div class="clbl">카테고리별 누적 금액</div>
+      <div class="legend">${lgH}</div>
+      <div style="position:relative;height:220px"><canvas id="areaChart" role="img" aria-label="누적 투자 금액 추이 차트"></canvas></div>
     </div>
-    <div class="chart-card">
-      <div class="chart-lbl">월별 기록</div>
+    <div class="cchart">
+      <div class="clbl">월별 기록</div>
       <table>
         <thead><tr>
-          <td style="color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">월</td>
-          <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">실수령</td>
-          <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">투자액</td>
-          <td style="text-align:right;color:var(--text3);font-size:11px;font-weight:500;text-transform:uppercase">달성률</td>
+          <td style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase">월</td>
+          <td class="tr" style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase">실수령</td>
+          <td class="tr" style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase">투자</td>
+          <td class="tr" style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase">지출</td>
+          <td class="tr" style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase">달성</td>
         </tr></thead>
         <tbody>${tableRows}</tbody>
       </table>
     </div>`;
-  if (areaInst) areaInst.destroy();
-  areaInst = new Chart(document.getElementById("areaChart").getContext("2d"), {
-    type:"line", data:{ labels, datasets },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      scales:{
-        x:{ ticks:{ font:{size:10}, color:"#898781" }, grid:{ color:"rgba(128,128,128,0.12)" } },
-        y:{ ticks:{ font:{size:10}, color:"#898781", callback:v=>`${Math.round(v/10000)}만` }, grid:{ color:"rgba(128,128,128,0.12)" } }
-      },
-      plugins:{
-        legend:{display:false},
-        tooltip:{ mode:"index", intersect:false, callbacks:{ label:ctx=>` ${ctx.dataset.label}: ${fw(ctx.raw)}` } }
-      }
+  if(areaInst)areaInst.destroy();
+  areaInst=new Chart(document.getElementById("areaChart").getContext("2d"),{
+    type:"line",data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{font:{size:10},color:"#898781"},grid:{color:"rgba(128,128,128,0.12)"}},y:{ticks:{font:{size:10},color:"#898781",callback:v=>`${Math.round(v/10000)}만`},grid:{color:"rgba(128,128,128,0.12)"}}},
+      plugins:{legend:{display:false},tooltip:{mode:"index",intersect:false,callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fw(ctx.raw)}`}}}
     }
   });
 }
 
-function renderSettings() {
-  document.getElementById("set-cats").innerHTML = CATS.map(c => {
+function renderSettings(){
+  document.getElementById("set-invest").innerHTML=ICATS.map(c=>{
     const t=appData.targets[c]||0;
-    return `
-      <div class="card">
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name"><span class="dot" style="background:${META[c].color}"></span>${META[c].label}</div>
-            <div class="setting-cur">현재 ${fw(t)}</div>
-          </div>
-          <input type="number" class="w70" id="st-${c}" value="${t/10000}" min="0" step="1">
-          <span class="unit">만원</span>
-        </div>
-      </div>`;
+    return`<div class="card"><div class="srow"><div class="sinf"><div class="sname"><span class="dot" style="background:${IMETA[c].color}"></span>${IMETA[c].label}</div><div class="scur">현재 ${fw(t)}</div></div><input type="number" class="w70" id="st-${c}" value="${t/10000}" min="0" step="1"><span class="unit">만원</span></div></div>`;
   }).join("");
-  const gistId = getGistId()||"(아직 없음)";
-  document.getElementById("gist-info-card").innerHTML = `
-    <div class="summ-lbl">Gist ID</div>
-    <div style="font-size:12px;font-family:monospace;color:var(--text2);word-break:break-all;margin-top:2px">${gistId}</div>
-    ${gistId!=="(아직 없음)" ? `<div style="margin-top:8px"><a href="https://gist.github.com/${gistId}" target="_blank" style="font-size:12px;color:var(--accent)">Gist에서 원본 보기 →</a></div>` : ""}`;
+  const et=appData.expTargets||DEF_EXP;
+  document.getElementById("set-exp").innerHTML=ECATS.map(c=>{
+    const t=et[c]||0;
+    return`<div class="card"><div class="srow"><div class="sinf"><div class="sname"><span class="dot" style="background:${EMETA[c].color}"></span>${EMETA[c].label}</div><div class="scur">현재 ${fw(t)}</div></div><input type="number" class="w70" id="et-${c}" value="${t/10000}" min="0" step="1"><span class="unit">만원</span></div></div>`;
+  }).join("");
+  const ss=appData.settings||DEF_SETTINGS;
+  const ssd=document.getElementById("st-savings-start");
+  const srd=document.getElementById("st-rent");
+  if(ssd)ssd.value=ss.savingsStart||"2026-07";
+  if(srd)srd.value=(ss.rentAmount||400000)/10000;
+  const gid=getGistId()||"(없음)";
+  document.getElementById("gist-info-card").innerHTML=`<div class="slval">Gist ID</div><div style="font-size:12px;font-family:monospace;color:var(--text2);word-break:break-all;margin-top:2px">${gid}</div>${gid!=="(없음)"?`<div style="margin-top:8px"><a href="https://gist.github.com/${gid}" target="_blank" style="font-size:12px;color:var(--accent)">Gist에서 원본 보기 →</a></div>`:""}`;
 }
 
-function goMonth(m) {
-  currentMonth = m;
-  document.getElementById("month-label").textContent = dispM(m);
-  switchTab("dash");
-}
+function goMonth(m){curMonth=m;document.getElementById("month-label").textContent=dispM(m);switchTab("dash");}
 
-// ─── 시작 ───────────────────────────────────────────────
-if (getToken()) {
-  initApp();
-} else {
-  document.getElementById("setup-screen").style.display = "flex";
-  document.getElementById("app").style.display = "none";
-}
+// ── 시작 ──
+if(getToken()){initApp();}else{document.getElementById("setup-screen").style.display="flex";document.getElementById("app").style.display="none";}
 </script>
 </body>
 </html>
