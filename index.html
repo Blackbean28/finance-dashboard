@@ -185,6 +185,8 @@
       <div class="legend" id="pie-legend"></div>
       <div style="position:relative;height:170px"><canvas id="pieChart" role="img" aria-label="투자 배분 도넛 차트"></canvas></div>
     </div>
+    <div class="slbl mt" id="networth-lbl" style="display:none">총 순자산 · 수익률</div>
+    <div id="networth-section"></div>
     <div class="slbl mt" id="extra-lbl" style="display:none">분석</div>
     <div id="extra-cards"></div>
   </div>
@@ -210,6 +212,11 @@
     <div class="info-box">QLD + CMA 합산 50만원 기준 · 당월 상황에 따라 유동 조정</div>
     <div id="input-cats"></div>
     <button class="bprimary" id="save-btn" onclick="saveMonth()">저장 및 동기화</button>
+    <div class="divider"></div>
+    <div class="slbl">이번 달 자산 현황</div>
+    <div class="info-box">각 계좌의 실제 잔액·평가액을 입력하면 총 순자산과 수익률을 계산합니다</div>
+    <div id="asset-inputs"></div>
+    <button class="bprimary" id="asset-save-btn" onclick="saveAsset()">자산 현황 저장</button>
   </div>
 
   <!-- 지출 -->
@@ -304,8 +311,17 @@ const EMETA={
 const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 
 let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},months:{}};
-let curMonth=getCurMonth(), inputVals={}, expVals={}, activeTab="dash";
+let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, activeTab="dash";
 let pieInst=null, expPieInst=null, areaInst=null;
+
+const ASSET_META=[
+  {key:"cmaBalance",   label:"CMA 잔액",       color:"#eb6834", hint:"CMA 앱에서 확인"},
+  {key:"isaValue",     label:"ISA 평가액",      color:"#1baf7a", hint:"미래에셋 ISA 계좌 평가액"},
+  {key:"pensionValue", label:"연금저축 평가액", color:"#2a78d6", hint:"미래에셋 연금저축 평가액"},
+  {key:"qldValue",     label:"QLD 평가액",      color:"#e34948", hint:"원화 환산 평가액"},
+  {key:"savingsBalance",label:"청년미래적금",   color:"#2a78d6", hint:"납입 원금 기준 자동입력 가능"},
+  {key:"cashEtc",      label:"기타 현금",       color:"#898781", hint:"생활비 통장 등 기타"},
+];
 
 // ── utils ──
 function getCurMonth(){const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;}
@@ -401,6 +417,18 @@ function syncSalary(){const v=(parseFloat(document.getElementById("inp-salary").
 function fillSalary(){const el=document.getElementById("inp-salary");if(el){el.value=380;syncSalary();}}
 function syncInv(c){const el=document.getElementById(`inp-${c}`);const v=(parseFloat(el.value)||0)*10000;inputVals[c]=v;const t=appData.targets[c]||0;const ei=document.getElementById(`ei-${c}`);const ep=document.getElementById(`ep-${c}`);if(ei)ei.textContent=fw(v);if(ep)ep.style.width=`${pb(v,t)}%`;}
 function fillInv(c){const t=appData.targets[c]||0;const el=document.getElementById(`inp-${c}`);if(el){el.value=t/10000;syncInv(c);}}
+function syncAsset(key){
+  const el=document.getElementById(`ai-${key}`);
+  const v=(parseFloat(el.value)||0)*10000;
+  assetVals[key]=v;
+  const ei=document.getElementById(`av-${key}`);
+  if(ei)ei.textContent=fw(v);
+}
+function fillAsset(key,manWon){
+  const el=document.getElementById(`ai-${key}`);
+  if(el){el.value=manWon;syncAsset(key);}
+}
+
 function syncExp(c){const el=document.getElementById(`exp-${c}`);const v=(parseFloat(el.value)||0)*10000;expVals[c]=v;const t=(appData.expTargets||DEF_EXP)[c]||0;const ei=document.getElementById(`eei-${c}`);const ep=document.getElementById(`eep-${c}`);if(ei)ei.textContent=fw(v);if(ep)ep.style.width=`${pb(v,t)}%`;updateExpTotal();}
 function fillExp(c){const t=(appData.expTargets||DEF_EXP)[c]||0;const el=document.getElementById(`exp-${c}`);if(el){el.value=t/10000;syncExp(c);}}
 
@@ -462,6 +490,113 @@ async function saveSettings(){
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
   showToast(ok?"설정 저장됐습니다 ✓":"저장 실패");
 }
+async function saveAsset(){
+  appData.months[curMonth]={...appData.months[curMonth],assetSnapshot:{...assetVals}};
+  setSB("syncing","저장 중...");
+  const btn=document.getElementById("asset-save-btn");btn.textContent="저장 중...";btn.disabled=true;
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  btn.textContent="자산 현황 저장";btn.disabled=false;
+  showToast(ok?"자산 현황 저장됐습니다 ✓":"저장 실패");
+  if(ok)switchTab("dash");
+}
+
+function renderNetWorth(){
+  const months=appData.months;
+  const mData=months[curMonth]||{};
+  const snap=mData.assetSnapshot;
+
+  // 누적 원금 계산
+  const cumul={}; ICATS.forEach(c=>cumul[c]=0);
+  Object.keys(months).forEach(m=>{const md=months[m]||{};ICATS.forEach(c=>{cumul[c]=(cumul[c]||0)+(md[c]||0);});});
+  const isaCum=["나스닥","SP500","반도체"].reduce((s,c)=>s+(cumul[c]||0),0);
+  const qldCum=cumul.QLD||0;
+  const savingsCum=cumul.적금||0;
+
+  // 연금저축 원금 = 회사 납입 누적 (입사 27.4만원/월)
+  const pensionMonths=Object.keys(months).length;
+  const pensionInvested=pensionMonths*274000;
+
+  const el=document.getElementById("networth-section");
+  const lbl=document.getElementById("networth-lbl");
+
+  if(!snap){
+    lbl.style.display="none";
+    el.innerHTML=`<div class="card" style="margin-bottom:10px">
+      <div style="text-align:center;padding:16px 0;color:var(--text3)">
+        <div style="font-size:20px;margin-bottom:6px">📊</div>
+        <div style="font-size:13px">입력 탭 → 자산 현황에서<br>각 계좌 잔액을 입력하면<br>순자산과 수익률이 나타납니다</div>
+      </div>
+    </div>`;
+    return;
+  }
+  lbl.style.display="block";
+
+  // 총 순자산
+  const totalNW=(snap.cmaBalance||0)+(snap.isaValue||0)+(snap.pensionValue||0)+(snap.qldValue||0)+(snap.savingsBalance||0)+(snap.cashEtc||0);
+
+  // 수익률 계산
+  function ret(val,invested){
+    if(!val||!invested)return null;
+    return((val-invested)/invested*100).toFixed(1);
+  }
+  const isaRet=ret(snap.isaValue,isaCum);
+  const qldRet=ret(snap.qldValue,qldCum);
+  const pensionRet=ret(snap.pensionValue,pensionInvested);
+  const cmaRet=ret(snap.cmaBalance,cumul.CMA||0);
+
+  function retBadge(r){
+    if(r===null)return"";
+    const n=parseFloat(r);
+    const col=n>0?"var(--green)":n<0?"var(--red)":"var(--text3)";
+    return`<span style="font-size:12px;font-weight:500;color:${col}">${n>0?"+":""}${r}%</span>`;
+  }
+
+  const rows=[
+    {l:"CMA",      val:snap.cmaBalance||0,   inv:cumul.CMA||0,      ret:cmaRet,    col:"#eb6834"},
+    {l:"ISA",      val:snap.isaValue||0,     inv:isaCum,            ret:isaRet,    col:"#1baf7a"},
+    {l:"연금저축", val:snap.pensionValue||0, inv:pensionInvested,   ret:pensionRet,col:"#2a78d6"},
+    {l:"QLD",      val:snap.qldValue||0,     inv:qldCum,            ret:qldRet,    col:"#e34948"},
+    {l:"청년미래적금",val:snap.savingsBalance||0,inv:savingsCum,    ret:null,      col:"#2a78d6"},
+    {l:"기타 현금",val:snap.cashEtc||0,      inv:0,                 ret:null,      col:"#898781"},
+  ].filter(r=>r.val>0);
+
+  // 총 수익
+  const totalInvested=isaCum+qldCum+pensionInvested+(cumul.CMA||0)+savingsCum;
+  const totalInvestVal=(snap.isaValue||0)+(snap.qldValue||0)+(snap.pensionValue||0)+(snap.cmaBalance||0)+(snap.savingsBalance||0);
+  const totalRet=totalInvested>0?((totalInvestVal-totalInvested)/totalInvested*100).toFixed(1):null;
+
+  el.innerHTML=`
+    <!-- 총 순자산 -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="slval">총 순자산 (${dispM(curMonth)} 기준)</div>
+      <div style="font-size:32px;font-weight:500;margin:8px 0 4px">${fw(totalNW)}</div>
+      ${totalRet!==null?`<div style="font-size:13px;color:${parseFloat(totalRet)>=0?'var(--green)':'var(--red)'}">
+        투자 수익률 ${parseFloat(totalRet)>=0?"+":""}${totalRet}% (투자 원금 ${fw(totalInvested)})
+      </div>`:""}
+    </div>
+    <!-- 계좌별 내역 -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="slval" style="margin-bottom:10px">계좌별 현황</div>
+      ${rows.map(r=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border)">
+          <span style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px">
+            <span class="dot" style="background:${r.col}"></span>${r.l}
+          </span>
+          <div style="text-align:right">
+            <div style="font-size:13px;font-weight:500">${fw(r.val)}</div>
+            ${r.ret!==null?`<div>${retBadge(r.ret)} <span style="font-size:11px;color:var(--text3)">원금 ${fw(r.inv)}</span></div>`
+            :r.inv>0?`<div style="font-size:11px;color:var(--text3)">납입 ${fw(r.inv)}</div>`:""}
+          </div>
+        </div>`).join("")}
+      <div style="display:flex;justify-content:space-between;padding-top:10px">
+        <span style="font-size:13px;font-weight:500">합계</span>
+        <span style="font-size:15px;font-weight:500">${fw(totalNW)}</span>
+      </div>
+    </div>
+  `;
+}
+
 async function resetAll(){
   if(!confirm("전체 데이터를 초기화하시겠습니까?"))return;
   appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},months:{}};
@@ -589,6 +724,9 @@ function renderDash(){
     });
   }
 
+  // 순자산 · 수익률
+  renderNetWorth();
+
   // 분석 카드
   const dday=calcDday();
   const tax=calcTaxRefund();
@@ -676,6 +814,34 @@ function renderInput(){
     return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" id="ei-${c}" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" id="ep-${c}" style="width:${p}%;background:${col}"></div></div><div class="irow"><input type="number" id="inp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncInv('${c}')"><span class="unit">만원</span><button class="bsm" onclick="fillInv('${c}')">목표치</button></div></div>`;
   }).join("");
   document.getElementById("save-btn").textContent=`${dispM(curMonth)} 저장 및 동기화`;
+
+  // 자산 현황 입력
+  const snap=mData.assetSnapshot||{};
+  assetVals={...snap};
+
+  // 청년미래적금 자동계산값
+  const cumul2={}; ICATS.forEach(c=>cumul2[c]=0);
+  Object.keys(appData.months).forEach(m=>{const md=appData.months[m]||{};ICATS.forEach(c=>{cumul2[c]=(cumul2[c]||0)+(md[c]||0);});});
+
+  document.getElementById("asset-inputs").innerHTML=ASSET_META.map(a=>{
+    const val=snap[a.key]||0;
+    const autoVal=a.key==="savingsBalance"?Math.round(cumul2.적금/10000):0;
+    return`<div class="card">
+      <div class="chdr" style="margin-bottom:8px">
+        <div>
+          <div class="cname"><span class="dot" style="background:${a.color}"></span>${a.label}</div>
+          <div class="csub">${a.hint}</div>
+        </div>
+        <div class="cright"><div class="cval" id="av-${a.key}" style="color:${a.color}">${fw(val)}</div></div>
+      </div>
+      <div class="irow">
+        <input type="number" id="ai-${a.key}" placeholder="${autoVal||0}" value="${val>0?Math.round(val/10000):''}" min="0" step="0.1" oninput="syncAsset('${a.key}')">
+        <span class="unit">만원</span>
+        ${a.key==="savingsBalance"&&autoVal>0?`<button class="bsm" onclick="fillAsset('${a.key}',${autoVal})">자동입력</button>`:""}
+      </div>
+    </div>`;
+  }).join("");
+  document.getElementById("asset-save-btn").textContent=`${dispM(curMonth)} 자산 현황 저장`;
 }
 
 function renderExpense(){
