@@ -92,7 +92,18 @@
   .bigtot { display:flex; justify-content:space-between; align-items:center; }
   .bignum { font-size:22px; font-weight:500; }
   .cchart { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:14px; margin-bottom:12px; }
-  .clbl { font-size:12px; color:var(--text3); margin-bottom:10px; }
+  .tick-bar { display:flex; background:var(--surface); border-bottom:0.5px solid var(--border); overflow-x:auto; }
+  .tick-bar::-webkit-scrollbar { display:none; }
+  .tick-item { flex-shrink:0; padding:8px 14px; border-right:0.5px solid var(--border); min-width:110px; cursor:pointer; }
+  .tick-item:hover { background:var(--surface2); }
+  .tick-name  { font-size:10px; color:var(--text3); margin-bottom:2px; font-weight:500; letter-spacing:.04em; }
+  .tick-price { font-size:13px; font-weight:500; }
+  .tick-chg   { font-size:11px; margin-top:1px; }
+  .tick-up   { color:var(--green); }
+  .tick-down { color:var(--red); }
+  .tick-last { flex:1; display:flex; align-items:center; justify-content:flex-end; padding:0 12px; }
+  .tick-last span { font-size:10px; color:var(--text3); cursor:pointer; }
+  .tick-last span:hover { color:var(--accent); }
   .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
   .lgitem { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text2); }
   .lgdot  { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
@@ -158,6 +169,22 @@
     </div>
     <div class="sync-badge" id="sync-badge">대기</div>
   </header>
+
+  <div class="tick-bar" id="market-ticker">
+    <div class="tick-item" id="tick-sp500">
+      <div class="tick-name">S&P500</div>
+      <div class="tick-price" style="color:var(--text3)">로딩중</div>
+    </div>
+    <div class="tick-item" id="tick-ndx">
+      <div class="tick-name">NASDAQ</div>
+      <div class="tick-price" style="color:var(--text3)">로딩중</div>
+    </div>
+    <div class="tick-item" id="tick-krw">
+      <div class="tick-name">USD/KRW</div>
+      <div class="tick-price" style="color:var(--text3)">로딩중</div>
+    </div>
+    <div class="tick-last"><span onclick="loadMarketData()" title="새로고침">↻ 새로고침</span></div>
+  </div>
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('dash')">현황</button>
@@ -391,6 +418,46 @@ async function forceSync(){
   setSB(ok?"synced":"error",ok?"동기화됨":"오류");
   if(ok){renderAll();showToast("Gist에서 불러왔습니다 ✓");}else showToast("불러오기 실패");
 }
+// ── 시장 지수 ──
+const TICKERS=[
+  {id:"tick-sp500", symbol:"^GSPC",  label:"S&P500",  fmt:v=>v.toLocaleString("en-US",{maximumFractionDigits:0})},
+  {id:"tick-ndx",   symbol:"^NDX",   label:"NASDAQ",  fmt:v=>v.toLocaleString("en-US",{maximumFractionDigits:0})},
+  {id:"tick-krw",   symbol:"KRW=X",  label:"USD/KRW", fmt:v=>v.toFixed(1)},
+];
+
+async function fetchTicker(symbol){
+  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`;
+  const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+  const res=await fetch(proxy,{signal:AbortSignal.timeout(10000)});
+  const outer=await res.json();
+  const inner=JSON.parse(outer.contents);
+  const meta=inner.chart.result[0].meta;
+  const price=meta.regularMarketPrice;
+  const prev=meta.chartPreviousClose||meta.regularMarketPreviousClose||price;
+  const change=price-prev;
+  const pct=prev>0?change/prev*100:0;
+  return{price,change,pct};
+}
+
+async function loadMarketData(){
+  document.querySelector(".tick-last span").textContent="↻ 로딩중...";
+  for(const t of TICKERS){
+    const el=document.getElementById(t.id);if(!el)continue;
+    try{
+      const d=await fetchTicker(t.symbol);
+      const up=d.change>=0;
+      const cls=up?"tick-up":"tick-down";
+      const arrow=up?"▲":"▼";
+      const chgStr=`${arrow} ${up?"+":""}${Math.abs(d.change).toFixed(t.symbol==="KRW=X"?1:1)} (${up?"+":""}${d.pct.toFixed(2)}%)`;
+      el.innerHTML=`<div class="tick-name">${t.label}</div><div class="tick-price">${t.fmt(d.price)}</div><div class="tick-chg ${cls}">${chgStr}</div>`;
+    }catch{
+      el.innerHTML=`<div class="tick-name">${t.label}</div><div class="tick-price" style="color:var(--text3)">—</div><div class="tick-chg" style="color:var(--text3)">조회 실패</div>`;
+    }
+  }
+  const now=new Date();
+  document.querySelector(".tick-last span").textContent=`↻ ${now.getHours()}:${String(now.getMinutes()).padStart(2,"0")} 기준`;
+}
+
 async function initApp(){
   document.getElementById("setup-screen").style.display="none";
   document.getElementById("app").style.display="block";
@@ -399,6 +466,8 @@ async function initApp(){
   const ok=await loadFromGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"오프라인");
   renderAll();
+  loadMarketData();
+  setInterval(loadMarketData, 10*60*1000); // 10분마다 자동 갱신
 }
 
 // ── 월 이동 ──
