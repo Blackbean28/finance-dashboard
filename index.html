@@ -208,7 +208,7 @@
     <div class="card" id="total-card"></div>
     <div id="dash-cats"></div>
     <div class="cchart hidden" id="pie-wrap">
-      <div class="clbl">이번 달 투자 배분</div>
+      <div class="clbl">누적 투자 배분</div>
       <div class="legend" id="pie-legend"></div>
       <div style="position:relative;height:170px"><canvas id="pieChart" role="img" aria-label="투자 배분 도넛 차트"></canvas></div>
     </div>
@@ -928,7 +928,7 @@ function renderDash(){
     return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${col}"></div></div></div>`;
   }).join("");
 
-  const pieData=ICATS.map(c=>({name:IMETA[c].label,val:mData[c]||0,col:IMETA[c].color})).filter(d=>d.val>0);
+  const pieData=ICATS.map(c=>({name:IMETA[c].label,val:cumul[c]||0,col:IMETA[c].color})).filter(d=>d.val>0);
   const pw=document.getElementById("pie-wrap");
   if(pieData.length===0){pw.classList.add("hidden");}else{
     pw.classList.remove("hidden");
