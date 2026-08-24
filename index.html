@@ -212,6 +212,8 @@
       <div class="legend" id="pie-legend"></div>
       <div style="position:relative;height:170px"><canvas id="pieChart" role="img" aria-label="투자 배분 도넛 차트"></canvas></div>
     </div>
+    <div class="slbl mt" id="isa-pf-lbl" style="display:none">ISA 포트폴리오</div>
+    <div id="isa-portfolio"></div>
     <div class="slbl mt" id="networth-lbl" style="display:none">총 순자산 · 수익률</div>
     <div id="networth-section"></div>
     <div class="slbl mt" id="extra-lbl" style="display:none">분석</div>
@@ -239,6 +241,11 @@
     <div class="info-box">QLD + CMA 합산 50만원 기준 · 당월 상황에 따라 유동 조정</div>
     <div id="input-cats"></div>
     <button class="bprimary" id="save-btn" onclick="saveMonth()">저장 및 동기화</button>
+    <div class="divider"></div>
+    <div class="slbl">ISA ETF 현재가</div>
+    <div class="info-box">각 ETF의 현재 주당 가격 입력 → 평가손익·수익률 자동 계산</div>
+    <div id="isa-price-inputs"></div>
+    <button class="bprimary" id="isa-price-save-btn" onclick="saveISAPrices()">ISA 현재가 저장</button>
     <div class="divider"></div>
     <div class="slbl">이번 달 자산 현황</div>
     <div class="info-box">각 계좌의 실제 잔액·평가액을 입력하면 총 순자산과 수익률을 계산합니다</div>
@@ -275,6 +282,11 @@
     <div class="info-box">QLD + CMA 합산 50만원 권장</div>
     <div id="set-invest"></div>
     <button class="bprimary" onclick="saveInvestTargets()">투자 목표 저장</button>
+    <div class="divider"></div>
+    <div class="slbl">ISA 평단가 · 보유수량</div>
+    <div class="info-box">미래에셋 ISA 앱에서 확인 후 입력. 현재가는 입력 탭에서 월별 업데이트.</div>
+    <div id="set-isa"></div>
+    <button class="bprimary" onclick="saveISAHoldings()">ISA 보유현황 저장</button>
     <div class="divider"></div>
     <div class="slbl">월 생활비 예산</div>
     <div id="set-exp"></div>
@@ -315,6 +327,15 @@
 <script>
 const GIST_FILE="finance-data.json", LS_TOKEN="fd_gh_token", LS_GIST="fd_gh_gist_id";
 
+const ISA_ETF={
+  나스닥:   {label:"TIGER 미국나스닥100",             color:"#1baf7a"},
+  SP500:    {label:"TIGER 미국S&P500",                color:"#3b6d11"},
+  반도체:   {label:"TIGER 미국필라델피아반도체나스닥", color:"#eda100"},
+  레버리지: {label:"TIGER 나스닥100레버리지(합성)",   color:"#e34948"},
+};
+const ISA_ETF_KEYS=Object.keys(ISA_ETF);
+const DEF_ISA={나스닥:{avgPrice:0,qty:0},SP500:{avgPrice:0,qty:0},반도체:{avgPrice:0,qty:0},레버리지:{avgPrice:0,qty:0}};
+
 const DEF_TARGETS={적금:500000,나스닥:750000,SP500:450000,반도체:300000,QLD:200000,CMA:300000};
 const DEF_EXP={식비:400000,교통:100000,쇼핑:200000,의료생활:100000,문화여가:100000,기타:100000};
 const DEF_SETTINGS={savingsStart:"2026-07",rentAmount:400000};
@@ -337,9 +358,9 @@ const EMETA={
 };
 const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 
-let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},months:{}};
-let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, activeTab="dash";
-let pieInst=null, expPieInst=null, areaInst=null;
+let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},months:{}};
+let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, isaPriceVals={}, activeTab="dash";
+let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null;
 
 const ASSET_META=[
   {key:"cmaBalance",   label:"CMA 잔액",       color:"#eb6834", hint:"CMA 앱에서 확인"},
@@ -381,7 +402,7 @@ async function loadFromGist(){
   if(!res.ok)return false;
   const d=await res.json();
   const c=d.files?.[GIST_FILE]?.content;
-  if(c){appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},months:{},...JSON.parse(c)};return true;}
+  if(c){appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},months:{},...JSON.parse(c)};return true;}
   return false;
 }
 async function saveToGist(){
@@ -675,13 +696,141 @@ async function resetAll(){
   inputVals={};expVals={};showToast("초기화됐습니다");renderAll();
 }
 
+// ── ISA 포트폴리오 ──
+function renderISAPortfolio(){
+  const h=appData.isaHoldings||DEF_ISA;
+  const prices=(appData.months[curMonth]||{}).isaPrices||{};
+  const lbl=document.getElementById("isa-pf-lbl");
+  const el=document.getElementById("isa-portfolio");
+  const hasH=ISA_ETF_KEYS.some(k=>(h[k]?.qty||0)>0);
+  if(!hasH){
+    lbl.style.display="none";
+    el.innerHTML=`<div class="card" style="margin-bottom:10px;text-align:center;padding:20px 16px;color:var(--text3)"><div style="font-size:24px;margin-bottom:8px">📈</div><div style="font-size:12px">설정 탭 → ISA 평단가·수량 입력 후<br>포트폴리오가 표시됩니다</div></div>`;
+    return;
+  }
+  lbl.style.display="block";
+  let totalCost=0,totalValue=0;
+  const rows=ISA_ETF_KEYS.map(k=>{
+    const avg=h[k]?.avgPrice||0,qty=h[k]?.qty||0,cur=prices[k]||0;
+    const cost=avg*qty,value=cur>0?cur*qty:0,pnl=value-cost;
+    const ret=cost>0&&cur>0?(pnl/cost*100):null;
+    totalCost+=cost;if(cur>0)totalValue+=value;
+    return{k,avg,qty,cur,cost,value,pnl,ret};
+  });
+  const totalPnl=totalValue-totalCost;
+  const totalRet=totalCost>0&&totalValue>0?(totalPnl/totalCost*100):null;
+
+  const trows=rows.map(r=>{
+    const col=ISA_ETF[r.k].color;
+    const nm=ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","");
+    const retStr=r.ret!==null?`${r.ret>=0?"+":""}${r.ret.toFixed(2)}%`:"—";
+    const retCol=r.ret===null?"var(--text3)":r.ret>=0?"var(--green)":"var(--red)";
+    const hasCur=r.cur>0;
+    return`<tr>
+      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}</td>
+      <td class="tr" style="font-size:11px">${r.qty>0?r.qty+"주":"—"}</td>
+      <td class="tr" style="font-size:11px">${r.cost>0?fwS(r.cost):"—"}</td>
+      <td class="tr" style="font-size:11px">${hasCur?fwS(r.value):"—"}</td>
+      <td class="tr" style="font-size:11px;color:${r.pnl>=0?"var(--green)":"var(--red)"}">${hasCur?(r.pnl>=0?"":"-")+fwS(Math.abs(r.pnl)):"—"}</td>
+      <td class="tr hl" style="font-size:11px;color:${retCol}">${retStr}</td>
+    </tr>`;
+  }).join("");
+
+  const pieData=ISA_ETF_KEYS.map(k=>{
+    const r=rows.find(r=>r.k===k);
+    return{name:ISA_ETF[k].label.replace("TIGER ","").replace("(합성)",""),val:r.value>0?r.value:(r.cost||0),col:ISA_ETF[k].color};
+  }).filter(d=>d.val>0);
+  const pieTotal=pieData.reduce((s,d)=>s+d.val,0);
+
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:10px;overflow-x:auto">
+      <div class="clbl" style="margin-bottom:8px">보유 ETF${totalRet!==null?` · 총 수익률 <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}
+      </div>
+      <table style="min-width:340px">
+        <thead><tr>
+          ${["종목","수량","매입","평가","손익","수익률"].map(h=>`<td class="${h!=="종목"?"tr":""}" style="font-size:10px;color:var(--text3);font-weight:500">${h}</td>`).join("")}
+        </tr></thead>
+        <tbody>${trows}</tbody>
+        <tfoot><tr style="border-top:1px solid var(--border-s)">
+          <td colspan="2" style="font-size:11px;font-weight:500;padding-top:6px">합계</td>
+          <td class="tr" style="font-size:11px;font-weight:500;padding-top:6px">${fwS(totalCost)}</td>
+          <td class="tr" style="font-size:11px;font-weight:500;padding-top:6px">${totalValue>0?fwS(totalValue):"—"}</td>
+          <td class="tr" style="font-size:11px;font-weight:500;padding-top:6px;color:${totalPnl>=0?"var(--green)":"var(--red)"}">${totalValue>0?(totalPnl>=0?"":"-")+fwS(Math.abs(totalPnl)):"—"}</td>
+          <td class="tr hl" style="font-size:11px;padding-top:6px;color:${totalRet!==null?(totalRet>=0?"var(--green)":"var(--red)"):"var(--text3)"}">${totalRet!==null?(totalRet>=0?"+":"")+totalRet.toFixed(2)+"%":"—"}</td>
+        </tr></tfoot>
+      </table>
+    </div>
+    ${pieData.length>0?`<div class="cchart" style="margin-bottom:10px">
+      <div class="clbl">ETF 비중 (${totalValue>0?"평가금액":"매입금액"} 기준)</div>
+      <div class="legend">${pieData.map(d=>`<span class="lgitem"><span class="lgdot" style="background:${d.col}"></span>${d.name} ${pieTotal>0?Math.round(d.val/pieTotal*100):0}%</span>`).join("")}</div>
+      <div style="position:relative;height:180px"><canvas id="isaPfChart" role="img" aria-label="ISA ETF 비중 차트"></canvas></div>
+    </div>`:""}`;
+
+  if(pieData.length>0){
+    if(isaPfInst)isaPfInst.destroy();
+    const surf=getComputedStyle(document.documentElement).getPropertyValue("--surface")||"#fff";
+    const ctx=document.getElementById("isaPfChart")?.getContext("2d");
+    if(ctx){isaPfInst=new Chart(ctx,{type:"doughnut",data:{labels:pieData.map(d=>d.name),datasets:[{data:pieData.map(d=>d.val),backgroundColor:pieData.map(d=>d.col),borderWidth:2,borderColor:surf}]},options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.label}: ${pieTotal>0?Math.round(c.raw/pieTotal*100):0}%`}}}}});}
+  }
+}
+
+function renderISAPriceInputs(){
+  const prices=(appData.months[curMonth]||{}).isaPrices||{};
+  isaPriceVals={...prices};
+  document.getElementById("isa-price-inputs").innerHTML=ISA_ETF_KEYS.map(k=>{
+    const p=prices[k]||0;
+    return`<div class="card"><div class="chdr" style="margin-bottom:8px"><div class="cname"><span class="dot" style="background:${ISA_ETF[k].color}"></span>${ISA_ETF[k].label.replace("TIGER ","").replace("(합성)","")}</div><div class="cright"><div class="cval" id="ip-${k}" style="color:${ISA_ETF[k].color}">${p>0?p.toLocaleString()+"원":"미입력"}</div></div></div><div class="irow"><input type="number" id="ipp-${k}" placeholder="현재가(원)" value="${p>0?p:''}" min="0" step="1" oninput="syncISAPrice('${k}')"><span class="unit">원</span></div></div>`;
+  }).join("");
+  const btn=document.getElementById("isa-price-save-btn");if(btn)btn.textContent=`${dispM(curMonth)} ISA 현재가 저장`;
+}
+
+function syncISAPrice(k){
+  const v=parseInt(document.getElementById(`ipp-${k}`)?.value)||0;
+  isaPriceVals[k]=v;
+  const el=document.getElementById(`ip-${k}`);
+  if(el)el.textContent=v>0?v.toLocaleString()+"원":"미입력";
+}
+
+async function saveISAPrices(){
+  appData.months[curMonth]={...appData.months[curMonth],isaPrices:{...isaPriceVals}};
+  setSB("syncing","저장 중...");
+  const btn=document.getElementById("isa-price-save-btn");btn.textContent="저장 중...";btn.disabled=true;
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  btn.textContent=`${dispM(curMonth)} ISA 현재가 저장`;btn.disabled=false;
+  showToast(ok?"ISA 현재가 저장됐습니다 ✓":"저장 실패");
+  if(ok)switchTab("dash");
+}
+
+function renderISAHoldingsSettings(){
+  const h=appData.isaHoldings||DEF_ISA;
+  document.getElementById("set-isa").innerHTML=ISA_ETF_KEYS.map(k=>{
+    const avg=h[k]?.avgPrice||0,qty=h[k]?.qty||0;
+    return`<div class="card"><div class="cname" style="margin-bottom:8px"><span class="dot" style="background:${ISA_ETF[k].color}"></span>${ISA_ETF[k].label.replace("TIGER ","").replace("(합성)","")}</div><div class="irow"><input type="number" id="sh-avg-${k}" placeholder="평단가(원)" value="${avg>0?avg:''}" min="0" step="1"><span class="unit">원</span><input type="number" id="sh-qty-${k}" placeholder="수량" value="${qty>0?qty:''}" min="0" step="1" style="flex:0.6"><span class="unit">주</span></div></div>`;
+  }).join("");
+}
+
+async function saveISAHoldings(){
+  if(!appData.isaHoldings)appData.isaHoldings={...DEF_ISA};
+  ISA_ETF_KEYS.forEach(k=>{
+    const avg=parseInt(document.getElementById(`sh-avg-${k}`)?.value)||0;
+    const qty=parseInt(document.getElementById(`sh-qty-${k}`)?.value)||0;
+    appData.isaHoldings[k]={avgPrice:avg,qty};
+  });
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  showToast(ok?"ISA 보유현황 저장됐습니다 ✓":"저장 실패");
+  if(ok)renderAll();
+}
+
 // ── 렌더링 ──
 function renderAll(){
-  if(activeTab==="dash")   renderDash();
-  if(activeTab==="input")  renderInput();
+  if(activeTab==="dash")   {renderDash();renderISAPortfolio();}
+  if(activeTab==="input")  {renderInput();renderISAPriceInputs();}
   if(activeTab==="expense")renderExpense();
   if(activeTab==="chart")  renderChart();
-  if(activeTab==="set")    renderSettings();
+  if(activeTab==="set")    {renderSettings();renderISAHoldingsSettings();}
 }
 
 // ── D-day 계산 ──
