@@ -206,6 +206,7 @@
     <div class="grid2" id="summ-cards"></div>
     <div class="slbl">이번 달 현황</div>
     <div class="card" id="total-card"></div>
+    <div class="card" id="isa-deposit-card" style="margin-bottom:10px;display:none"></div>
     <div id="dash-cats"></div>
     <div class="cchart hidden" id="pie-wrap">
       <div class="clbl">누적 투자 배분</div>
@@ -549,6 +550,17 @@ function switchTab(t){
 }
 
 // ── 입력 sync ──
+function syncISADeposit(){
+  const v=(parseFloat(document.getElementById("inp-isaDeposit")?.value)||0)*10000;
+  inputVals.isaDeposit=v;
+  const el=document.getElementById("ei-isaDeposit");
+  if(el)el.textContent=v>0?fw(v):"자동";
+}
+function clearISADeposit(){
+  const el=document.getElementById("inp-isaDeposit");
+  if(el){el.value="";inputVals.isaDeposit=0;const dei=document.getElementById("ei-isaDeposit");if(dei)dei.textContent="자동";}
+}
+
 function syncSalary(){const v=(parseFloat(document.getElementById("inp-salary").value)||0)*10000;inputVals.salary=v;const el=document.getElementById("ei-salary");if(el)el.textContent=fw(v);}
 function fillSalary(){const el=document.getElementById("inp-salary");if(el){el.value=380;syncSalary();}}
 function syncInv(c){const el=document.getElementById(`inp-${c}`);const v=(parseFloat(el.value)||0)*10000;inputVals[c]=v;const t=appData.targets[c]||0;const ei=document.getElementById(`ei-${c}`);const ep=document.getElementById(`ep-${c}`);if(ei)ei.textContent=fw(v);if(ep)ep.style.width=`${pb(v,t)}%`;}
@@ -1245,25 +1257,37 @@ function renderDash(){
     </div>
     <div class="pbar" style="margin:10px 0 0"><div class="pfill" style="width:${pNow}%;background:var(--accent)"></div></div>`;
 
+  // ISA 납입액 카드
+  const monthlyISAData=calcMonthlyISA(curMonth);
+  const isaMonthFromTx=ISA_ETF_KEYS.reduce((s,k)=>s+(monthlyISAData[k]?.cost||0),0);
+  const isaMonthDeposit=mData.isaDeposit||0;
+  const isaDepositDisplay=isaMonthDeposit>0?isaMonthDeposit:isaMonthFromTx;
+  const isaTgt=1500000,isaDepPct=pb(isaDepositDisplay,isaTgt);
+  const isaDepEl=document.getElementById("isa-deposit-card");
+  if(isaDepEl){
+    if(isaDepositDisplay>0){
+      isaDepEl.style.display="block";
+      isaDepEl.innerHTML=`<div class="chdr" style="margin-bottom:8px"><div><div class="cname"><span class="dot" style="background:#1baf7a"></span>ISA 납입액</div><div class="csub">목표 150만원/월</div></div><div class="cright"><div class="cval" style="color:#1baf7a">${fw(isaDepositDisplay)}</div>${isaMonthFromTx>0&&isaMonthDeposit===0?`<div class="cmeta">거래 합산</div>`:""}</div></div><div class="pbar"><div class="pfill" style="width:${isaDepPct}%;background:#1baf7a"></div></div>`;
+    } else { isaDepEl.style.display="none"; }
+  }
+
   const isaH=calcISAHoldings();
   document.getElementById("dash-cats").innerHTML=ICATS.map(c=>{
     const t=targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
+    const isISA=["나스닥","SP500","반도체"].includes(c);
     const sub=IMETA[c].sub?`<div class="csub">${IMETA[c].sub}</div>`:"";
     let pfInfo="";
-    if(["나스닥","SP500","반도체"].includes(c)){
+    if(isISA){
       const h=isaH[c],cur=isaLivePrices[c]||0;
       if(h&&h.totalQty>0){
         const value=cur>0?cur*h.totalQty:0,pnl=value-h.totalCost;
         const ret=h.totalCost>0&&cur>0?(pnl/h.totalCost*100):null;
-        pfInfo=`<div style="display:flex;justify-content:space-between;font-size:11px;padding-top:6px;margin-top:6px;border-top:0.5px solid var(--border)">
-          <span style="color:var(--text3)">${h.totalQty}주 · 평단 ${h.avgPrice>0?h.avgPrice.toLocaleString()+"원":"—"}</span>
-          <span style="color:${ret!==null?(ret>=0?"var(--green)":"var(--red)"):"var(--text3)"}">
-            ${value>0?fwS(value):"—"}${ret!==null?` (${ret>=0?"+":""}${ret.toFixed(1)}%)`:""}
-          </span>
-        </div>`;
+        const dispVal=value>0?fwS(value):(h.totalCost>0?`${fwS(h.totalCost)} 매입`:"—");
+        const dispCol=ret!==null?(ret>=0?"var(--green)":"var(--red)"):"var(--text3)";
+        pfInfo=`<div style="display:flex;justify-content:space-between;font-size:11px;padding-top:6px;margin-top:6px;border-top:0.5px solid var(--border)"><span style="color:var(--text3)">${h.totalQty}주 · 평단 ${h.avgPrice>0?h.avgPrice.toLocaleString()+"원":"—"}</span><span style="color:${dispCol}">${dispVal}${ret!==null?` (${ret>=0?"+":""}${ret.toFixed(1)}%)`:""}</span></div>`;
       }
     }
-    return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${col}"></div></div>${pfInfo}</div>`;
+    return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" style="color:${col}">${fw(a)}</div>${!isISA?`<div class="cmeta">목표 ${fw(t)}</div>`:""}</div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${col}"></div></div>${pfInfo}</div>`;
   }).join("");
 
   const pieData=ICATS.map(c=>({name:IMETA[c].label,val:cumul[c]||0,col:IMETA[c].color})).filter(d=>d.val>0);
@@ -1392,28 +1416,32 @@ function renderInput(){
   ];
   const autoTotal=autoItems.reduce((s,a)=>s+a.val,0);
 
-  // 직접 입력 항목 (QLD, CMA)
+  // 직접 입력 항목 (ISA 납입액, QLD, CMA)
   const manualCats=["QLD","CMA"];
+  const isaDepositVal=mData.isaDeposit||0;
 
   document.getElementById("input-cats").innerHTML=`
     <div class="slbl">자동 입력 항목</div>
     <div class="card" style="margin-bottom:10px">
       ${autoItems.map(a=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span class="dot" style="background:${a.color}"></span>
-            <span style="font-size:13px">${a.label}</span>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:13px;font-weight:500;color:${a.color}">${fw(a.val)}</div>
-            <div style="font-size:10px;color:var(--text3)">${a.note}</div>
-          </div>
+          <div style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:${a.color}"></span><span style="font-size:13px">${a.label}</span></div>
+          <div style="text-align:right"><div style="font-size:13px;font-weight:500;color:${a.color}">${fw(a.val)}</div><div style="font-size:10px;color:var(--text3)">${a.note}</div></div>
         </div>`).join("")}
-      <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:500">
-        <span>소계</span><span>${fw(autoTotal)}</span>
-      </div>
+      <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:500"><span>소계</span><span>${fw(autoTotal)}</span></div>
     </div>
     <div class="slbl">직접 입력 항목</div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="chdr" style="margin-bottom:8px">
+        <div><div class="cname"><span class="dot" style="background:#1baf7a"></span>ISA 납입액</div><div class="csub">목표 150만원 · 미입력 시 거래 합산 자동 표시</div></div>
+        <div class="cright"><div class="cval" id="ei-isaDeposit" style="color:#1baf7a">${isaDepositVal>0?fw(isaDepositVal):"자동"}</div></div>
+      </div>
+      <div class="irow">
+        <input type="number" id="inp-isaDeposit" placeholder="150" value="${isaDepositVal>0?isaDepositVal/10000:''}" min="0" step="1" oninput="syncISADeposit()">
+        <span class="unit">만원</span>
+        <button class="bsm" onclick="clearISADeposit()">자동</button>
+      </div>
+    </div>
     ${manualCats.map(c=>{
       const t=appData.targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
       return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div><div class="csub">${c==="QLD"?"레버리지 ETF":"유동 조정 가능"}</div></div><div class="cright"><div class="cval" id="ei-${c}" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" id="ep-${c}" style="width:${p}%;background:${col}"></div></div><div class="irow"><input type="number" id="inp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncInv('${c}')"><span class="unit">만원</span><button class="bsm" onclick="fillInv('${c}')">목표치</button></div></div>`;
