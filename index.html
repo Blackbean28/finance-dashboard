@@ -328,10 +328,10 @@
 const GIST_FILE="finance-data.json", LS_TOKEN="fd_gh_token", LS_GIST="fd_gh_gist_id";
 
 const ISA_ETF={
-  나스닥:   {label:"TIGER 미국나스닥100",             color:"#1baf7a"},
-  SP500:    {label:"TIGER 미국S&P500",                color:"#3b6d11"},
-  반도체:   {label:"TIGER 미국필라델피아반도체나스닥", color:"#eda100"},
-  레버리지: {label:"TIGER 나스닥100레버리지(합성)",   color:"#e34948"},
+  나스닥:   {label:"TIGER 미국나스닥100",             color:"#1baf7a", ticker:"133690.KS"},
+  SP500:    {label:"TIGER 미국S&P500",                color:"#3b6d11", ticker:"360750.KS"},
+  반도체:   {label:"TIGER 미국필라델피아반도체나스닥", color:"#eda100", ticker:"381180.KS"},
+  레버리지: {label:"TIGER 나스닥100레버리지(합성)",   color:"#e34948", ticker:"406970.KS"},
 };
 const ISA_ETF_KEYS=Object.keys(ISA_ETF);
 const DEF_ISA={나스닥:{avgPrice:0,qty:0},SP500:{avgPrice:0,qty:0},반도체:{avgPrice:0,qty:0},레버리지:{avgPrice:0,qty:0}};
@@ -360,6 +360,7 @@ const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 
 let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},months:{}};
 let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, isaPriceVals={}, activeTab="dash";
+let isaLivePrices={}, isaLastFetch=null;
 let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null;
 
 const ASSET_META=[
@@ -488,6 +489,7 @@ async function initApp(){
   setSB(ok?"synced":"error",ok?"동기화됨":"오프라인");
   renderAll();
   loadMarketData();
+  fetchISAETFPrices();
   setInterval(loadMarketData, 10*60*1000); // 10분마다 자동 갱신
 }
 
@@ -696,10 +698,33 @@ async function resetAll(){
   inputVals={};expVals={};showToast("초기화됐습니다");renderAll();
 }
 
+// ── ISA ETF 자동 가격 조회 ──
+async function fetchISAETFPrices(showToastMsg=false){
+  const pfEl=document.getElementById("isa-pf-refresh");
+  if(pfEl)pfEl.textContent="조회 중...";
+  let anySuccess=false;
+  for(const k of ISA_ETF_KEYS){
+    try{
+      const sym=ISA_ETF[k].ticker;
+      const url=`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const res=await fetch(proxy,{signal:AbortSignal.timeout(8000)});
+      const outer=await res.json();
+      const inner=JSON.parse(outer.contents);
+      const price=inner.chart.result[0].meta.regularMarketPrice;
+      if(price>0){isaLivePrices[k]=Math.round(price);anySuccess=true;}
+    }catch{}
+  }
+  isaLastFetch=new Date();
+  const timeStr=`${isaLastFetch.getHours()}:${String(isaLastFetch.getMinutes()).padStart(2,"0")}`;
+  if(pfEl)pfEl.textContent=`↻ ${timeStr} 기준`;
+  if(showToastMsg)showToast(anySuccess?"ETF 가격 조회됐습니다 ✓":"일부 가격 조회 실패");
+  renderISAPortfolio();
+}
+
 // ── ISA 포트폴리오 ──
 function renderISAPortfolio(){
   const h=appData.isaHoldings||DEF_ISA;
-  const prices=(appData.months[curMonth]||{}).isaPrices||{};
   const lbl=document.getElementById("isa-pf-lbl");
   const el=document.getElementById("isa-portfolio");
   const hasH=ISA_ETF_KEYS.some(k=>(h[k]?.qty||0)>0);
@@ -709,9 +734,14 @@ function renderISAPortfolio(){
     return;
   }
   lbl.style.display="block";
+  // 가격 우선순위: 자동조회 > 수동입력(fallback)
+  const manualPrices=(appData.months[curMonth]||{}).isaPrices||{};
+  const getPrice=k=>isaLivePrices[k]||manualPrices[k]||0;
+  const isLive=ISA_ETF_KEYS.some(k=>isaLivePrices[k]>0);
+
   let totalCost=0,totalValue=0;
   const rows=ISA_ETF_KEYS.map(k=>{
-    const avg=h[k]?.avgPrice||0,qty=h[k]?.qty||0,cur=prices[k]||0;
+    const avg=h[k]?.avgPrice||0,qty=h[k]?.qty||0,cur=getPrice(k);
     const cost=avg*qty,value=cur>0?cur*qty:0,pnl=value-cost;
     const ret=cost>0&&cur>0?(pnl/cost*100):null;
     totalCost+=cost;if(cur>0)totalValue+=value;
@@ -726,8 +756,9 @@ function renderISAPortfolio(){
     const retStr=r.ret!==null?`${r.ret>=0?"+":""}${r.ret.toFixed(2)}%`:"—";
     const retCol=r.ret===null?"var(--text3)":r.ret>=0?"var(--green)":"var(--red)";
     const hasCur=r.cur>0;
+    const curStr=hasCur?`<div style="font-size:10px;color:var(--text3)">${r.cur.toLocaleString()}원</div>`:"";
     return`<tr>
-      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}</td>
+      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}${curStr}</td>
       <td class="tr" style="font-size:11px">${r.qty>0?r.qty+"주":"—"}</td>
       <td class="tr" style="font-size:11px">${r.cost>0?fwS(r.cost):"—"}</td>
       <td class="tr" style="font-size:11px">${hasCur?fwS(r.value):"—"}</td>
@@ -741,10 +772,14 @@ function renderISAPortfolio(){
     return{name:ISA_ETF[k].label.replace("TIGER ","").replace("(합성)",""),val:r.value>0?r.value:(r.cost||0),col:ISA_ETF[k].color};
   }).filter(d=>d.val>0);
   const pieTotal=pieData.reduce((s,d)=>s+d.val,0);
+  const timeStr=isaLastFetch?`${isaLastFetch.getHours()}:${String(isaLastFetch.getMinutes()).padStart(2,"0")} 기준`:"미조회";
 
   el.innerHTML=`
     <div class="card" style="margin-bottom:10px;overflow-x:auto">
-      <div class="clbl" style="margin-bottom:8px">보유 ETF${totalRet!==null?` · 총 수익률 <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="clbl" style="margin-bottom:0">보유 ETF${totalRet!==null?` · <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}
+        </div>
+        <span id="isa-pf-refresh" onclick="fetchISAETFPrices(true)" style="font-size:11px;color:var(--accent);cursor:pointer">↻ ${isLive?timeStr:"가격 조회"}</span>
       </div>
       <table style="min-width:340px">
         <thead><tr>
