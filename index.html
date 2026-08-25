@@ -846,50 +846,30 @@ function initTxDate(){
   }
 }
 
-// ── ISA ETF 자동 가격 조회 (네이버 금융) ──
-async function fetchNaverPrice(code){
-  const pollingUrl=`https://polling.finance.naver.com/api/realtime/domestic/stock/${code}`;
-  const mobileUrl=`https://m.stock.naver.com/api/stock/${code}/integration`;
-
-  const attempts=[
-    // 1. polling API + corsproxy.io (URL 비인코딩)
-    {url:`https://corsproxy.io/?${pollingUrl}`,
-     parse:d=>d.result?.itemList?.[0]?.sv||null},
-    // 2. mobile API + corsproxy.io
-    {url:`https://corsproxy.io/?${mobileUrl}`,
-     parse:d=>{const p=parseInt((d.closePrice||'').replace(/,/g,''));return p>0?p:null;}},
-    // 3. polling API + allorigins
-    {url:`https://api.allorigins.win/get?url=${encodeURIComponent(pollingUrl)}`,
-     parse:d=>{try{const p=d.contents?JSON.parse(d.contents):d;return p.result?.itemList?.[0]?.sv||null;}catch{return null;}}},
-    // 4. mobile API + allorigins
-    {url:`https://api.allorigins.win/get?url=${encodeURIComponent(mobileUrl)}`,
-     parse:d=>{try{const p=d.contents?JSON.parse(d.contents):d;const v=parseInt((p.closePrice||'').replace(/,/g,''));return v>0?v:null;}catch{return null;}}},
-  ];
-
-  for(const a of attempts){
-    try{
-      const res=await fetch(a.url,{signal:AbortSignal.timeout(5000)});
-      if(!res.ok)continue;
-      const data=await res.json();
-      const price=a.parse(data);
-      if(price&&price>0)return price;
-    }catch{}
-  }
-  return null;
-}
-
+// ── ISA ETF 가격 조회 (GitHub Actions로 생성된 prices.json) ──
 async function fetchISAETFPrices(showToastMsg=false){
   const pfEl=document.getElementById("isa-pf-refresh");
   if(pfEl)pfEl.textContent="조회 중...";
-  let anySuccess=false;
-  for(const k of ISA_ETF_KEYS){
-    const price=await fetchNaverPrice(ISA_ETF[k].ncode);
-    if(price){isaLivePrices[k]=price;anySuccess=true;}
+  try{
+    const url=`https://raw.githubusercontent.com/Blackbean28/finance-dashboard/main/prices.json?t=${Date.now()}`;
+    const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
+    if(!res.ok)throw new Error("fetch failed");
+    const data=await res.json();
+    let anySuccess=false;
+    if(data.prices){
+      ISA_ETF_KEYS.forEach(k=>{
+        const p=data.prices[k];
+        if(p&&p>0){isaLivePrices[k]=p;anySuccess=true;}
+      });
+    }
+    isaLastFetch=new Date();
+    const timeStr=data.updated||`${isaLastFetch.getHours()}:${String(isaLastFetch.getMinutes()).padStart(2,"0")}`;
+    if(pfEl)pfEl.textContent=`↻ ${timeStr}`;
+    if(showToastMsg)showToast(anySuccess?"ETF 가격 조회됐습니다 ✓":"가격 데이터 없음 (Actions 실행 필요)");
+  }catch(e){
+    if(pfEl)pfEl.textContent="↻ 조회 실패";
+    if(showToastMsg)showToast("가격 파일 읽기 실패");
   }
-  isaLastFetch=new Date();
-  const timeStr=`${isaLastFetch.getHours()}:${String(isaLastFetch.getMinutes()).padStart(2,"0")}`;
-  if(pfEl)pfEl.textContent=`↻ ${timeStr} 기준`;
-  if(showToastMsg)showToast(anySuccess?"ETF 가격 조회됐습니다 ✓":"가격 조회 실패 (장외 시간이거나 네트워크 문제)");
   renderISAPortfolio();
   renderPensionPortfolio();
   renderDash();
