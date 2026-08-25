@@ -676,8 +676,8 @@ function renderNetWorth(){
 
   const totalNW=cmaBalance+isaValue+pensionValue+qldValue+savingsBalance+cashEtc;
 
-  // 누적 원금
-  const isaDepositCumNW=Object.values(months).reduce((s,m)=>s+(m.isaDeposit||0),0);
+  // 누적 원금 (수익률 계산용 - 실제 순매수금액 기준)
+  const isaTransTotal=(appData.transactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
   const pensionTransTotal=(appData.pensionTransactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
   const cumul={}; ICATS.forEach(c=>cumul[c]=0);
   Object.keys(months).forEach(m=>{const md=months[m]||{};ICATS.forEach(c=>{cumul[c]=(cumul[c]||0)+(md[c]||0);});});
@@ -699,21 +699,21 @@ function renderNetWorth(){
   function ret(val,inv){if(!val||!inv)return null;return((val-inv)/inv*100).toFixed(1);}
   function retBadge(r){if(r===null)return"";const n=parseFloat(r),col=n>0?"var(--green)":n<0?"var(--red)":"var(--text3)";return`<span style="font-size:12px;font-weight:500;color:${col}">${n>0?"+":""}${r}%</span>`;}
 
-  const isaRet=ret(isaValue,isaDepositCumNW);
+  const isaRet=ret(isaValue,isaTransTotal);
   const pensionRet=ret(pensionValue,pensionTransTotal);
   const qldRet=ret(qldValue,qldCum);
   const cmaRet=ret(cmaBalance,cumul.CMA||0);
 
   const rows=[
-    {l:"CMA",          val:cmaBalance,   inv:cumul.CMA||0,      ret:cmaRet,     col:"#eb6834",  auto:false},
-    {l:"ISA",          val:isaValue,     inv:isaDepositCumNW,   ret:isaRet,     col:"#1baf7a",  auto:isaHasHoldings&&isaLiveTotal>0},
-    {l:"연금저축",     val:pensionValue, inv:pensionTransTotal, ret:pensionRet, col:"#e34948",  auto:pensionHasHoldings&&pensionLiveTotal>0},
-    {l:"QLD",          val:qldValue,     inv:qldCum,            ret:qldRet,     col:"#e34948",  auto:false},
-    {l:"청년미래적금", val:savingsBalance,inv:savingsCum,        ret:null,       col:"#2a78d6",  auto:false},
-    {l:"기타 현금",    val:cashEtc,      inv:0,                 ret:null,       col:"#898781",  auto:false},
+    {l:"CMA",          val:cmaBalance,    inv:cumul.CMA||0,     ret:cmaRet,     col:"#eb6834", auto:false},
+    {l:"ISA",          val:isaValue,      inv:isaTransTotal,    ret:isaRet,     col:"#1baf7a", auto:isaHasHoldings&&isaLiveTotal>0},
+    {l:"연금저축",     val:pensionValue,  inv:pensionTransTotal,ret:pensionRet, col:"#e34948", auto:pensionHasHoldings&&pensionLiveTotal>0},
+    {l:"QLD",          val:qldValue,      inv:qldCum,           ret:qldRet,     col:"#e34948", auto:false},
+    {l:"청년미래적금", val:savingsBalance,inv:savingsCum,       ret:null,       col:"#2a78d6", auto:false},
+    {l:"기타 현금",    val:cashEtc,       inv:0,                ret:null,       col:"#898781", auto:false},
   ].filter(r=>r.val>0);
 
-  const totalInvested=isaDepositCumNW+qldCum+pensionTransTotal+(cumul.CMA||0)+savingsCum;
+  const totalInvested=isaTransTotal+qldCum+pensionTransTotal+(cumul.CMA||0)+savingsCum;
   const totalInvestVal=isaValue+qldValue+pensionValue+cmaBalance+savingsBalance;
   const totalRet=totalInvested>0&&totalInvestVal>0?((totalInvestVal-totalInvested)/totalInvested*100).toFixed(1):null;
 
