@@ -1294,11 +1294,14 @@ function renderDash(){
     } else { isaDepEl.style.display="none"; }
   }
 
+  // 파이차트용 누적 계산 (transactions 기반)
+  const isaTransTotal=(appData.transactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
+
   const pieData=[
-    {name:"청년미래적금", val:cumul.적금||0,  col:"#2a78d6"},
-    {name:"ISA",          val:isaCum||0,        col:"#1baf7a"},
-    {name:"연금저축",     val:pensionTotal||0,  col:"#e34948"},
-    {name:"CMA 목돈",    val:cumul.CMA||0,     col:"#eb6834"},
+    {name:"청년미래적금", val:cumul.적금||0,    col:"#2a78d6"},
+    {name:"ISA",          val:isaTransTotal||0,  col:"#1baf7a"},
+    {name:"연금저축",     val:pensionTotal||0,   col:"#e34948"},
+    {name:"CMA 목돈",    val:cumul.CMA||0,      col:"#eb6834"},
   ].filter(d=>d.val>0);
   const pw=document.getElementById("pie-wrap");
   if(pieData.length===0){pw.classList.add("hidden");}else{
