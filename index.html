@@ -246,7 +246,10 @@
     <div class="card" style="margin-bottom:10px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <select id="tx-etf" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
-          ${ISA_ETF_KEYS.map(k=>`<option value="${k}">${ISA_ETF[k].label.replace("TIGER ","").replace("(합성)","")}</option>`).join("")}
+          <option value="나스닥">미국나스닥100</option>
+          <option value="SP500">미국S&P500</option>
+          <option value="반도체">미국필라델피아반도체</option>
+          <option value="레버리지">나스닥100레버리지</option>
         </select>
         <input type="date" id="tx-date" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
       </div>
