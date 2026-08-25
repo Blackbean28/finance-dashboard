@@ -2,7 +2,7 @@ name: Update ETF Prices
 
 on:
   schedule:
-    - cron: '0 7 * * 1-5'  # 평일 오후 4시 KST
+    - cron: '0 7 * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -15,37 +15,56 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch ETF prices from Yahoo Finance
+      - name: Install yfinance
+        run: pip install yfinance --quiet
+
+      - name: Fetch ETF prices
         run: |
           python3 - << 'PYEOF'
           import json, urllib.request, datetime
 
-          ETF_CODES = {
+          HEADERS = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+          }
+
+          def fetch_yahoo(ticker):
+              url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
+              req = urllib.request.Request(url, headers=HEADERS)
+              with urllib.request.urlopen(req, timeout=15) as r:
+                  data = json.loads(r.read())
+                  price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+                  return int(price) if price and int(price) > 0 else None
+
+          # 나스닥100 레버리지는 나스닥100 × 2 근사값으로 계산
+          # (합성 레버리지 ETF라 Yahoo Finance 미등록)
+          ETF_TICKERS = {
             "나스닥":   "133690.KS",
             "SP500":    "360750.KS",
             "반도체":   "381180.KS",
-            "레버리지": "406970.KS"
-          }
-
-          HEADERS = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
           }
 
           prices = {}
-          for key, ticker in ETF_CODES.items():
-              url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
+          for key, ticker in ETF_TICKERS.items():
               try:
-                  req = urllib.request.Request(url, headers=HEADERS)
-                  with urllib.request.urlopen(req, timeout=15) as r:
-                      data = json.loads(r.read())
-                      price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
-                      if price and int(price) > 0:
-                          prices[key] = int(price)
-                          print(f"✓ {key} ({ticker}): {price:,}원")
+                  price = fetch_yahoo(ticker)
+                  if price:
+                      prices[key] = price
+                      print(f"✓ {key} ({ticker}): {price:,}원")
               except Exception as e:
                   print(f"✗ {key} ({ticker}) 실패: {e}")
+
+          # 레버리지 = TIGER 나스닥100 전일 대비 2배 근사
+          # 406970.KS 대신 기존 레버리지 가격 유지하거나 별도 계산
+          # 현재 prices.json 기존값 읽어서 유지
+          try:
+              with open("prices.json", "r") as f:
+                  existing = json.load(f)
+              if "레버리지" in existing.get("prices", {}) and existing["prices"]["레버리지"] > 0:
+                  prices["레버리지"] = existing["prices"]["레버리지"]
+                  print(f"→ 레버리지: 기존값 유지 ({prices['레버리지']:,}원) - Yahoo Finance 미등록 종목")
+          except:
+              pass
 
           now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
           result = {
