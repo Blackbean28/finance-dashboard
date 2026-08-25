@@ -673,7 +673,8 @@ function renderNetWorth(){
   const el=document.getElementById("networth-section");
   const lbl=document.getElementById("networth-lbl");
 
-  if(!snap){
+  const snapHasData=snap&&Object.values(snap).some(v=>v>0);
+  if(!snapHasData){
     lbl.style.display="none";
     el.innerHTML=`<div class="card" style="margin-bottom:10px">
       <div style="text-align:center;padding:16px 0;color:var(--text3)">
@@ -1152,9 +1153,9 @@ async function deletePensionTransaction(id){
 // ── ISA 연간 납입한도 ──
 function calcISAYearlyUsage(){
   const year=new Date().getFullYear();
-  const usage=(appData.transactions||[])
-    .filter(t=>t.date.startsWith(String(year)))
-    .reduce((s,t)=>s+t.price*t.qty,0);
+  const usage=Object.keys(appData.months)
+    .filter(m=>m.startsWith(String(year)))
+    .reduce((s,m)=>s+(appData.months[m].isaDeposit||0),0);
   const limit=appData.settings?.isaYearlyLimit||20000000,remaining=limit-usage,pct=Math.min(Math.round(usage/limit*100),100);
   return{usage,limit,remaining,pct,year};
 }
@@ -1240,10 +1241,10 @@ function renderDash(){
   // ISA 누적 = 월별 납입액 합산 (직접 입력값 기준)
   const isaDepositCum=Object.values(appData.months).reduce((s,m)=>s+(m.isaDeposit||0),0);
 
-  // 이번달 투자 총액 (ISA는 거래 합산 반영)
-  const isaMonthNow=ISA_ETF_KEYS.reduce((s,k)=>s+(monthlyISANow[k]?.cost||0),0);
-  const totalNow=["적금","QLD","CMA"].reduce((s,c)=>s+(mData[c]||0),0)+isaMonthNow;
-  const totalTgt=ICATS.reduce((s,c)=>s+(targets[c]||0),0);
+  // 이번달 투자 총액 (ISA는 납입액 직접 입력 기준)
+  const isaThisMonth=mData.isaDeposit||0;
+  const totalNow=["적금","QLD","CMA"].reduce((s,c)=>s+(mData[c]||0),0)+isaThisMonth;
+  const totalTgt=ICATS.reduce((s,c)=>s+(targets[c]||0),0)+1500000; // ISA 목표 150만원 포함
   const pNow=pb(totalNow,totalTgt);
 
   // 올바른 누적 총계
