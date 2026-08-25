@@ -2,9 +2,8 @@ name: Update ETF Prices
 
 on:
   schedule:
-    # 평일 오후 4시 (KST) = UTC 07:00
-    - cron: '0 7 * * 1-5'
-  workflow_dispatch:  # 수동 실행 가능
+    - cron: '0 7 * * 1-5'  # 평일 오후 4시 KST
+  workflow_dispatch:
 
 jobs:
   update-prices:
@@ -16,50 +15,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch ETF prices from Naver Finance
+      - name: Fetch ETF prices from Yahoo Finance
         run: |
           python3 - << 'PYEOF'
           import json, urllib.request, datetime
 
           ETF_CODES = {
-            "나스닥":   "133690",
-            "SP500":    "360750",
-            "반도체":   "381180",
-            "레버리지": "406970"
+            "나스닥":   "133690.KS",
+            "SP500":    "360750.KS",
+            "반도체":   "381180.KS",
+            "레버리지": "406970.KS"
+          }
+
+          HEADERS = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
           }
 
           prices = {}
-          for key, code in ETF_CODES.items():
-              urls = [
-                f"https://polling.finance.naver.com/api/realtime/domestic/stock/{code}",
-                f"https://m.stock.naver.com/api/stock/{code}/integration",
-              ]
-              for url in urls:
-                  try:
-                      req = urllib.request.Request(url, headers={
-                          "User-Agent": "Mozilla/5.0 (compatible; price-bot)",
-                          "Referer": "https://finance.naver.com"
-                      })
-                      with urllib.request.urlopen(req, timeout=10) as r:
-                          data = json.loads(r.read())
-                          # polling API
-                          price = data.get("result", {}).get("itemList", [{}])[0].get("sv")
-                          # mobile API fallback
-                          if not price:
-                              raw = data.get("closePrice", "0")
-                              price = int(str(raw).replace(",", "")) if raw else None
-                          if price and int(price) > 0:
-                              prices[key] = int(price)
-                              print(f"✓ {key} ({code}): {price:,}원")
-                              break
-                  except Exception as e:
-                      print(f"  {url} 실패: {e}")
+          for key, ticker in ETF_CODES.items():
+              url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
+              try:
+                  req = urllib.request.Request(url, headers=HEADERS)
+                  with urllib.request.urlopen(req, timeout=15) as r:
+                      data = json.loads(r.read())
+                      price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+                      if price and int(price) > 0:
+                          prices[key] = int(price)
+                          print(f"✓ {key} ({ticker}): {price:,}원")
+              except Exception as e:
+                  print(f"✗ {key} ({ticker}) 실패: {e}")
 
           now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
           result = {
-              "prices": prices,
-              "updated": now.strftime("%Y-%m-%d %H:%M KST"),
-              "date": now.strftime("%Y-%m-%d")
+            "prices": prices,
+            "updated": now.strftime("%Y-%m-%d %H:%M KST"),
+            "date": now.strftime("%Y-%m-%d")
           }
 
           with open("prices.json", "w", encoding="utf-8") as f:
