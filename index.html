@@ -660,8 +660,8 @@ function renderNetWorth(){
   const mData=months[curMonth]||{};
   const snap=mData.assetSnapshot;
 
-  // 누적 원금 계산 (transactions 기반)
-  const isaTransTotal=(appData.transactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
+  // 누적 원금 계산 (ISA는 납입액 기준, 연금저축은 transactions 기준)
+  const isaDepositCumNW=Object.values(months).reduce((s,m)=>s+(m.isaDeposit||0),0);
   const pensionTransTotal=(appData.pensionTransactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
 
   // CMA, QLD, 적금은 월별 저장 데이터 기반
@@ -693,7 +693,7 @@ function renderNetWorth(){
     if(!val||!invested)return null;
     return((val-invested)/invested*100).toFixed(1);
   }
-  const isaRet=ret(snap.isaValue,isaTransTotal);
+  const isaRet=ret(snap.isaValue,isaDepositCumNW);
   const qldRet=ret(snap.qldValue,qldCum);
   const pensionRet=ret(snap.pensionValue,pensionTransTotal);
   const cmaRet=ret(snap.cmaBalance,cumul.CMA||0);
@@ -706,16 +706,16 @@ function renderNetWorth(){
   }
 
   const rows=[
-    {l:"CMA",        val:snap.cmaBalance||0,    inv:cumul.CMA||0,       ret:cmaRet,       col:"#eb6834"},
-    {l:"ISA",        val:snap.isaValue||0,       inv:isaTransTotal,      ret:isaRet,       col:"#1baf7a"},
-    {l:"연금저축",   val:snap.pensionValue||0,   inv:pensionTransTotal,  ret:pensionRet,   col:"#e34948"},
-    {l:"QLD",        val:snap.qldValue||0,       inv:qldCum,             ret:qldRet,       col:"#e34948"},
-    {l:"청년미래적금",val:snap.savingsBalance||0,inv:savingsCum,         ret:null,         col:"#2a78d6"},
-    {l:"기타 현금",  val:snap.cashEtc||0,        inv:0,                  ret:null,         col:"#898781"},
+    {l:"CMA",        val:snap.cmaBalance||0,    inv:cumul.CMA||0,          ret:cmaRet,     col:"#eb6834"},
+    {l:"ISA",        val:snap.isaValue||0,       inv:isaDepositCumNW,       ret:isaRet,     col:"#1baf7a"},
+    {l:"연금저축",   val:snap.pensionValue||0,   inv:pensionTransTotal,     ret:pensionRet, col:"#e34948"},
+    {l:"QLD",        val:snap.qldValue||0,       inv:qldCum,                ret:qldRet,     col:"#e34948"},
+    {l:"청년미래적금",val:snap.savingsBalance||0,inv:savingsCum,            ret:null,       col:"#2a78d6"},
+    {l:"기타 현금",  val:snap.cashEtc||0,        inv:0,                     ret:null,       col:"#898781"},
   ].filter(r=>r.val>0);
 
   // 총 수익
-  const totalInvested=isaTransTotal+qldCum+pensionTransTotal+(cumul.CMA||0)+savingsCum;
+  const totalInvested=isaDepositCumNW+qldCum+pensionTransTotal+(cumul.CMA||0)+savingsCum;
   const totalInvestVal=(snap.isaValue||0)+(snap.qldValue||0)+(snap.pensionValue||0)+(snap.cmaBalance||0)+(snap.savingsBalance||0);
   const totalRet=totalInvested>0&&totalInvestVal>0?((totalInvestVal-totalInvested)/totalInvested*100).toFixed(1):null;
 
@@ -1237,22 +1237,26 @@ function renderDash(){
   const isaTransTotal=(appData.transactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
 
   // 이번달 투자 총액 (ISA는 거래 합산 반영)
+  // ISA 누적 = 월별 납입액 합산 (직접 입력값 기준)
+  const isaDepositCum=Object.values(appData.months).reduce((s,m)=>s+(m.isaDeposit||0),0);
+
+  // 이번달 투자 총액 (ISA는 거래 합산 반영)
   const isaMonthNow=ISA_ETF_KEYS.reduce((s,k)=>s+(monthlyISANow[k]?.cost||0),0);
   const totalNow=["적금","QLD","CMA"].reduce((s,c)=>s+(mData[c]||0),0)+isaMonthNow;
   const totalTgt=ICATS.reduce((s,c)=>s+(targets[c]||0),0);
   const pNow=pb(totalNow,totalTgt);
 
-  // 올바른 누적 총계 (ISA는 transactions, 나머지는 monthly 저장값)
+  // 올바른 누적 총계
   const nonISACum=(cumul.적금||0)+(cumul.QLD||0)+(cumul.CMA||0);
-  const totalCumAll=nonISACum+isaTransTotal+pensionTotal;
+  const totalCumAll=nonISACum+isaDepositCum+pensionTotal;
 
   document.getElementById("hdr-sub").textContent=`월급 380만원 · 누적 ${fw(totalCumAll)}`;
   document.getElementById("summ-cards").innerHTML=[
-    {l:"총 누적 투자", v:fw(totalCumAll),           col:"var(--accent)"},
-    {l:"ISA 누적",     v:fw(isaTransTotal),          col:"var(--green)"},
-    {l:"연금저축",     v:fw(pensionTotal),            col:"#e34948"},
-    {l:"청년미래적금", v:fw(cumul.적금||0),           col:"#2a78d6"},
-    {l:"CMA 목돈",    v:fw(cumul.CMA||0),            col:"#eb6834"},
+    {l:"총 누적 투자", v:fw(totalCumAll),    col:"var(--accent)"},
+    {l:"ISA 납입액",   v:fw(isaDepositCum),  col:"var(--green)"},
+    {l:"연금저축",     v:fw(pensionTotal),   col:"#e34948"},
+    {l:"청년미래적금", v:fw(cumul.적금||0),  col:"#2a78d6"},
+    {l:"CMA 목돈",    v:fw(cumul.CMA||0),   col:"#eb6834"},
   ].map(({l,v,col})=>`<div class="card" style="margin-bottom:0"><div class="slval">${l}</div><div class="svval" style="color:${col}">${v}</div></div>`).join("");
 
   const salary=mData.salary||0;
@@ -1306,9 +1310,9 @@ function renderDash(){
   // 파이차트용 누적 계산 (transactions 기반)
   const pieData=[
     {name:"청년미래적금", val:cumul.적금||0,    col:"#2a78d6"},
-    {name:"ISA",          val:isaTransTotal||0,  col:"#1baf7a"},
-    {name:"연금저축",     val:pensionTotal||0,   col:"#e34948"},
-    {name:"CMA 목돈",    val:cumul.CMA||0,      col:"#eb6834"},
+    {name:"ISA",          val:isaDepositCum||0, col:"#1baf7a"},
+    {name:"연금저축",     val:pensionTotal||0,  col:"#e34948"},
+    {name:"CMA 목돈",    val:cumul.CMA||0,     col:"#eb6834"},
   ].filter(d=>d.val>0);
   const pieTotal=pieData.reduce((s,d)=>s+d.val,0);
   const pw=document.getElementById("pie-wrap");
