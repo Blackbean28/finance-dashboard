@@ -409,12 +409,10 @@ let isaLivePrices={}, isaLastFetch=null;
 let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null, pensionPfInst=null;
 
 const ASSET_META=[
-  {key:"cmaBalance",   label:"CMA 잔액",       color:"#eb6834", hint:"CMA 앱에서 확인"},
-  {key:"isaValue",     label:"ISA 평가액",      color:"#1baf7a", hint:"미래에셋 ISA 계좌 평가액"},
-  {key:"pensionValue", label:"연금저축 평가액", color:"#2a78d6", hint:"미래에셋 연금저축 평가액"},
-  {key:"qldValue",     label:"QLD 평가액",      color:"#e34948", hint:"원화 환산 평가액"},
-  {key:"savingsBalance",label:"청년미래적금",   color:"#2a78d6", hint:"납입 원금 기준 자동입력 가능"},
-  {key:"cashEtc",      label:"기타 현금",       color:"#898781", hint:"생활비 통장 등 기타"},
+  {key:"cmaBalance",    label:"CMA 잔액",     color:"#eb6834", hint:"CMA 앱에서 확인"},
+  {key:"qldValue",      label:"QLD 평가액",   color:"#e34948", hint:"원화 환산 평가액"},
+  {key:"savingsBalance",label:"청년미래적금", color:"#2a78d6", hint:"납입 원금 기준 자동입력 가능"},
+  {key:"cashEtc",       label:"기타 현금",    color:"#898781", hint:"생활비 통장 등 기타"},
 ];
 
 // ── utils ──
@@ -658,13 +656,29 @@ async function saveAsset(){
 function renderNetWorth(){
   const months=appData.months;
   const mData=months[curMonth]||{};
-  const snap=mData.assetSnapshot;
+  const snap=mData.assetSnapshot||{};
 
-  // 누적 원금 계산 (ISA는 납입액 기준, 연금저축은 transactions 기준)
+  // ISA·연금저축: 포트폴리오 라이브 가격 자동 계산
+  const isaH=calcISAHoldings();
+  const pensionH=calcPensionHoldings();
+  const isaLiveTotal=ISA_ETF_KEYS.reduce((s,k)=>s+(isaLivePrices[k]||0)*(isaH[k]?.totalQty||0),0);
+  const pensionLiveTotal=ISA_ETF_KEYS.reduce((s,k)=>s+(isaLivePrices[k]||0)*(pensionH[k]?.totalQty||0),0);
+  const isaHasHoldings=ISA_ETF_KEYS.some(k=>(isaH[k]?.totalQty||0)>0);
+  const pensionHasHoldings=ISA_ETF_KEYS.some(k=>(pensionH[k]?.totalQty||0)>0);
+
+  // 라이브가 없으면 수동 스냅샷 fallback
+  const isaValue=isaHasHoldings?(isaLiveTotal||snap.isaValue||0):(snap.isaValue||0);
+  const pensionValue=pensionHasHoldings?(pensionLiveTotal||snap.pensionValue||0):(snap.pensionValue||0);
+  const cmaBalance=snap.cmaBalance||0;
+  const qldValue=snap.qldValue||0;
+  const savingsBalance=snap.savingsBalance||0;
+  const cashEtc=snap.cashEtc||0;
+
+  const totalNW=cmaBalance+isaValue+pensionValue+qldValue+savingsBalance+cashEtc;
+
+  // 누적 원금
   const isaDepositCumNW=Object.values(months).reduce((s,m)=>s+(m.isaDeposit||0),0);
   const pensionTransTotal=(appData.pensionTransactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
-
-  // CMA, QLD, 적금은 월별 저장 데이터 기반
   const cumul={}; ICATS.forEach(c=>cumul[c]=0);
   Object.keys(months).forEach(m=>{const md=months[m]||{};ICATS.forEach(c=>{cumul[c]=(cumul[c]||0)+(md[c]||0);});});
   const qldCum=cumul.QLD||0;
@@ -673,82 +687,60 @@ function renderNetWorth(){
   const el=document.getElementById("networth-section");
   const lbl=document.getElementById("networth-lbl");
 
-  const snapHasData=snap&&Object.values(snap).some(v=>v>0);
-  if(!snapHasData){
+  // ISA 또는 연금 보유 중이거나 수동 입력값 있으면 표시
+  const hasData=totalNW>0||isaHasHoldings||pensionHasHoldings;
+  if(!hasData){
     lbl.style.display="none";
-    el.innerHTML=`<div class="card" style="margin-bottom:10px">
-      <div style="text-align:center;padding:16px 0;color:var(--text3)">
-        <div style="font-size:20px;margin-bottom:6px">📊</div>
-        <div style="font-size:13px">입력 탭 → 자산 현황에서<br>각 계좌 잔액을 입력하면<br>순자산과 수익률이 나타납니다</div>
-      </div>
-    </div>`;
+    el.innerHTML=`<div class="card" style="margin-bottom:10px"><div style="text-align:center;padding:16px 0;color:var(--text3)"><div style="font-size:20px;margin-bottom:6px">📊</div><div style="font-size:13px">ISA·연금저축 거래 입력 후<br>또는 입력 탭 자산 현황 입력 후<br>순자산이 나타납니다</div></div></div>`;
     return;
   }
   lbl.style.display="block";
 
-  // 총 순자산
-  const totalNW=(snap.cmaBalance||0)+(snap.isaValue||0)+(snap.pensionValue||0)+(snap.qldValue||0)+(snap.savingsBalance||0)+(snap.cashEtc||0);
+  function ret(val,inv){if(!val||!inv)return null;return((val-inv)/inv*100).toFixed(1);}
+  function retBadge(r){if(r===null)return"";const n=parseFloat(r),col=n>0?"var(--green)":n<0?"var(--red)":"var(--text3)";return`<span style="font-size:12px;font-weight:500;color:${col}">${n>0?"+":""}${r}%</span>`;}
 
-  // 수익률 계산
-  function ret(val,invested){
-    if(!val||!invested)return null;
-    return((val-invested)/invested*100).toFixed(1);
-  }
-  const isaRet=ret(snap.isaValue,isaDepositCumNW);
-  const qldRet=ret(snap.qldValue,qldCum);
-  const pensionRet=ret(snap.pensionValue,pensionTransTotal);
-  const cmaRet=ret(snap.cmaBalance,cumul.CMA||0);
-
-  function retBadge(r){
-    if(r===null)return"";
-    const n=parseFloat(r);
-    const col=n>0?"var(--green)":n<0?"var(--red)":"var(--text3)";
-    return`<span style="font-size:12px;font-weight:500;color:${col}">${n>0?"+":""}${r}%</span>`;
-  }
+  const isaRet=ret(isaValue,isaDepositCumNW);
+  const pensionRet=ret(pensionValue,pensionTransTotal);
+  const qldRet=ret(qldValue,qldCum);
+  const cmaRet=ret(cmaBalance,cumul.CMA||0);
 
   const rows=[
-    {l:"CMA",        val:snap.cmaBalance||0,    inv:cumul.CMA||0,          ret:cmaRet,     col:"#eb6834"},
-    {l:"ISA",        val:snap.isaValue||0,       inv:isaDepositCumNW,       ret:isaRet,     col:"#1baf7a"},
-    {l:"연금저축",   val:snap.pensionValue||0,   inv:pensionTransTotal,     ret:pensionRet, col:"#e34948"},
-    {l:"QLD",        val:snap.qldValue||0,       inv:qldCum,                ret:qldRet,     col:"#e34948"},
-    {l:"청년미래적금",val:snap.savingsBalance||0,inv:savingsCum,            ret:null,       col:"#2a78d6"},
-    {l:"기타 현금",  val:snap.cashEtc||0,        inv:0,                     ret:null,       col:"#898781"},
+    {l:"CMA",          val:cmaBalance,   inv:cumul.CMA||0,      ret:cmaRet,     col:"#eb6834",  auto:false},
+    {l:"ISA",          val:isaValue,     inv:isaDepositCumNW,   ret:isaRet,     col:"#1baf7a",  auto:isaHasHoldings&&isaLiveTotal>0},
+    {l:"연금저축",     val:pensionValue, inv:pensionTransTotal, ret:pensionRet, col:"#e34948",  auto:pensionHasHoldings&&pensionLiveTotal>0},
+    {l:"QLD",          val:qldValue,     inv:qldCum,            ret:qldRet,     col:"#e34948",  auto:false},
+    {l:"청년미래적금", val:savingsBalance,inv:savingsCum,        ret:null,       col:"#2a78d6",  auto:false},
+    {l:"기타 현금",    val:cashEtc,      inv:0,                 ret:null,       col:"#898781",  auto:false},
   ].filter(r=>r.val>0);
 
-  // 총 수익
   const totalInvested=isaDepositCumNW+qldCum+pensionTransTotal+(cumul.CMA||0)+savingsCum;
-  const totalInvestVal=(snap.isaValue||0)+(snap.qldValue||0)+(snap.pensionValue||0)+(snap.cmaBalance||0)+(snap.savingsBalance||0);
+  const totalInvestVal=isaValue+qldValue+pensionValue+cmaBalance+savingsBalance;
   const totalRet=totalInvested>0&&totalInvestVal>0?((totalInvestVal-totalInvested)/totalInvested*100).toFixed(1):null;
 
   el.innerHTML=`
-    <!-- 총 순자산 -->
     <div class="card" style="margin-bottom:10px">
       <div class="slval">총 순자산 (${dispM(curMonth)} 기준)</div>
       <div style="font-size:32px;font-weight:500;margin:8px 0 4px">${fw(totalNW)}</div>
-      ${totalRet!==null?`<div style="font-size:13px;color:${parseFloat(totalRet)>=0?'var(--green)':'var(--red)'}">
-        투자 수익률 ${parseFloat(totalRet)>=0?"+":""}${totalRet}% (투자 원금 ${fw(totalInvested)})
-      </div>`:""}
+      ${totalRet!==null?`<div style="font-size:13px;color:${parseFloat(totalRet)>=0?"var(--green)":"var(--red)"}">투자 수익률 ${parseFloat(totalRet)>=0?"+":""}${totalRet}% · 원금 ${fw(totalInvested)}</div>`:""}
     </div>
-    <!-- 계좌별 내역 -->
     <div class="card" style="margin-bottom:10px">
       <div class="slval" style="margin-bottom:10px">계좌별 현황</div>
       ${rows.map(r=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border)">
           <span style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px">
             <span class="dot" style="background:${r.col}"></span>${r.l}
+            ${r.auto?`<span style="font-size:10px;color:var(--green);background:var(--green-bg);padding:1px 5px;border-radius:4px">자동</span>`:""}
           </span>
           <div style="text-align:right">
             <div style="font-size:13px;font-weight:500">${fw(r.val)}</div>
-            ${r.ret!==null?`<div>${retBadge(r.ret)} <span style="font-size:11px;color:var(--text3)">원금 ${fw(r.inv)}</span></div>`
-            :r.inv>0?`<div style="font-size:11px;color:var(--text3)">납입 ${fw(r.inv)}</div>`:""}
+            ${r.ret!==null?`<div>${retBadge(r.ret)} <span style="font-size:11px;color:var(--text3)">원금 ${fw(r.inv)}</span></div>`:r.inv>0?`<div style="font-size:11px;color:var(--text3)">납입 ${fw(r.inv)}</div>`:""}
           </div>
         </div>`).join("")}
       <div style="display:flex;justify-content:space-between;padding-top:10px">
         <span style="font-size:13px;font-weight:500">합계</span>
         <span style="font-size:15px;font-weight:500">${fw(totalNW)}</span>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 async function resetAll(){
