@@ -856,19 +856,31 @@ function initTxDate(){
 
 // ── ISA ETF 자동 가격 조회 (네이버 금융) ──
 async function fetchNaverPrice(code){
-  const url=`https://polling.finance.naver.com/api/realtime/domestic/stock/${code}`;
-  const proxies=[
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  const pollingUrl=`https://polling.finance.naver.com/api/realtime/domestic/stock/${code}`;
+  const mobileUrl=`https://m.stock.naver.com/api/stock/${code}/integration`;
+
+  const attempts=[
+    // 1. polling API + corsproxy.io (URL 비인코딩)
+    {url:`https://corsproxy.io/?${pollingUrl}`,
+     parse:d=>d.result?.itemList?.[0]?.sv||null},
+    // 2. mobile API + corsproxy.io
+    {url:`https://corsproxy.io/?${mobileUrl}`,
+     parse:d=>{const p=parseInt((d.closePrice||'').replace(/,/g,''));return p>0?p:null;}},
+    // 3. polling API + allorigins
+    {url:`https://api.allorigins.win/get?url=${encodeURIComponent(pollingUrl)}`,
+     parse:d=>{try{const p=d.contents?JSON.parse(d.contents):d;return p.result?.itemList?.[0]?.sv||null;}catch{return null;}}},
+    // 4. mobile API + allorigins
+    {url:`https://api.allorigins.win/get?url=${encodeURIComponent(mobileUrl)}`,
+     parse:d=>{try{const p=d.contents?JSON.parse(d.contents):d;const v=parseInt((p.closePrice||'').replace(/,/g,''));return v>0?v:null;}catch{return null;}}},
   ];
-  for(const proxy of proxies){
+
+  for(const a of attempts){
     try{
-      const res=await fetch(proxy,{signal:AbortSignal.timeout(6000)});
+      const res=await fetch(a.url,{signal:AbortSignal.timeout(5000)});
       if(!res.ok)continue;
-      const raw=await res.json();
-      const parsed=raw.contents?JSON.parse(raw.contents):raw;
-      const price=parsed.result?.itemList?.[0]?.sv;
-      if(price>0)return Math.round(price);
+      const data=await res.json();
+      const price=a.parse(data);
+      if(price&&price>0)return price;
     }catch{}
   }
   return null;
