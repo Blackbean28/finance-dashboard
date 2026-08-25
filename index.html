@@ -203,7 +203,7 @@
   <!-- 현황 -->
   <div id="tab-dash" class="body">
     <div class="slbl">전체 누적</div>
-    <div class="grid2" id="summ-cards"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px" id="summ-cards"></div>
     <div class="slbl">이번 달 현황</div>
     <div class="card" id="total-card"></div>
     <div class="card" id="isa-deposit-card" style="margin-bottom:10px;display:none"></div>
@@ -1234,18 +1234,23 @@ function renderDash(){
   // 이번달 ISA 거래 합산 (저장 전에도 반영)
   const monthlyISANow=calcMonthlyISA(curMonth);
   const pensionTotal=(appData.pensionTransactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
+  const isaTransTotal=(appData.transactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
 
-  document.getElementById("hdr-sub").textContent=`월급 380만원 · 누적 ${fw(totalCum)}`;
-  document.getElementById("summ-cards").innerHTML=[
-    {l:"총 누적 투자",v:fw(totalCum),col:"var(--accent)"},
-    {l:"ISA 누적",    v:fw(isaCum),  col:"var(--green)"},
-    {l:"CMA 목돈",   v:fw(cumul.CMA||0), col:"#eb6834"},
-    {l:"청년미래적금",v:fw(cumul.적금||0),col:"#2a78d6"},
-  ].map(({l,v,col})=>`<div class="card" style="margin-bottom:0"><div class="slval">${l}</div><div class="svval" style="color:${col}">${v}</div></div>`).join("");
-
-  const totalNow=ICATS.reduce((s,c)=>s+(mData[c]||0),0);
+  // 이번달 투자 총액 (ISA는 거래 합산 반영)
+  const isaMonthNow=ISA_ETF_KEYS.reduce((s,k)=>s+(monthlyISANow[k]?.cost||0),0);
+  const totalNow=["적금","QLD","CMA"].reduce((s,c)=>s+(mData[c]||0),0)+isaMonthNow;
   const totalTgt=ICATS.reduce((s,c)=>s+(targets[c]||0),0);
   const pNow=pb(totalNow,totalTgt);
+
+  document.getElementById("hdr-sub").textContent=`월급 380만원 · 누적 ${fw(ICATS.reduce((s,c)=>s+(cumul[c]||0),0)+isaTransTotal)}`;
+  document.getElementById("summ-cards").innerHTML=[
+    {l:"총 누적 투자", v:fw(ICATS.reduce((s,c)=>s+(cumul[c]||0),0)+isaTransTotal), col:"var(--accent)"},
+    {l:"ISA 누적",     v:fw(isaTransTotal),        col:"var(--green)"},
+    {l:"연금저축",     v:fw(pensionTotal),          col:"#e34948"},
+    {l:"청년미래적금", v:fw(cumul.적금||0),         col:"#2a78d6"},
+    {l:"CMA 목돈",    v:fw(cumul.CMA||0),          col:"#eb6834"},
+  ].map(({l,v,col})=>`<div class="card" style="margin-bottom:0"><div class="slval">${l}</div><div class="svval" style="color:${col}">${v}</div></div>`).join("");
+
   const salary=mData.salary||0;
   const remaining=salary>0?salary-totalNow:null;
   const srate=salary>0?Math.round(totalNow/salary*100):null;
@@ -1295,24 +1300,23 @@ function renderDash(){
   }
 
   // 파이차트용 누적 계산 (transactions 기반)
-  const isaTransTotal=(appData.transactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
-
   const pieData=[
     {name:"청년미래적금", val:cumul.적금||0,    col:"#2a78d6"},
     {name:"ISA",          val:isaTransTotal||0,  col:"#1baf7a"},
     {name:"연금저축",     val:pensionTotal||0,   col:"#e34948"},
     {name:"CMA 목돈",    val:cumul.CMA||0,      col:"#eb6834"},
   ].filter(d=>d.val>0);
+  const pieTotal=pieData.reduce((s,d)=>s+d.val,0);
   const pw=document.getElementById("pie-wrap");
   if(pieData.length===0){pw.classList.add("hidden");}else{
     pw.classList.remove("hidden");
-    document.getElementById("pie-legend").innerHTML=pieData.map(d=>`<span class="lgitem"><span class="lgdot" style="background:${d.col}"></span>${d.name} ${fwS(d.val)}</span>`).join("");
+    document.getElementById("pie-legend").innerHTML=pieData.map(d=>`<span class="lgitem"><span class="lgdot" style="background:${d.col}"></span>${d.name} ${pieTotal>0?Math.round(d.val/pieTotal*100):0}%</span>`).join("");
     if(pieInst)pieInst.destroy();
     const surf=getComputedStyle(document.documentElement).getPropertyValue("--surface")||"#fff";
     pieInst=new Chart(document.getElementById("pieChart").getContext("2d"),{
       type:"doughnut",
       data:{labels:pieData.map(d=>d.name),datasets:[{data:pieData.map(d=>d.val),backgroundColor:pieData.map(d=>d.col),borderWidth:2,borderColor:surf}]},
-      options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${fw(ctx.raw)}`}}}}
+      options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${pieTotal>0?Math.round(ctx.raw/pieTotal*100):0}% (${fw(ctx.raw)})`}}}}
     });
   }
 
