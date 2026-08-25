@@ -214,6 +214,8 @@
     </div>
     <div class="slbl mt" id="isa-pf-lbl" style="display:none">ISA 포트폴리오</div>
     <div id="isa-portfolio"></div>
+    <div class="slbl mt" id="pension-pf-lbl" style="display:none">연금저축 포트폴리오</div>
+    <div id="pension-portfolio"></div>
     <div class="slbl mt" id="networth-lbl" style="display:none">총 순자산 · 수익률</div>
     <div id="networth-section"></div>
     <div class="slbl mt" id="extra-lbl" style="display:none">분석</div>
@@ -267,6 +269,32 @@
       <button class="bprimary" style="margin-top:0" onclick="addTransaction()">거래 추가</button>
     </div>
     <div id="tx-list"></div>
+    <div class="divider"></div>
+    <div class="slbl">연금저축 매수 거래 입력</div>
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <select id="ptx-etf" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
+          <option value="나스닥">미국나스닥100</option>
+          <option value="SP500">미국S&P500</option>
+          <option value="반도체">미국필라델피아반도체</option>
+          <option value="레버리지">나스닥100레버리지</option>
+        </select>
+        <input type="date" id="ptx-date" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="ptx-price" placeholder="주문단가" min="0" step="1" style="flex:1;background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
+          <span class="unit">원</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="ptx-qty" placeholder="수량" min="1" step="1" style="flex:1;background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
+          <span class="unit">주</span>
+        </div>
+      </div>
+      <div id="ptx-preview" style="font-size:12px;color:var(--text3);margin-bottom:8px;min-height:16px"></div>
+      <button class="bprimary" style="margin-top:0" onclick="addPensionTransaction()">거래 추가</button>
+    </div>
+    <div id="ptx-list"></div>
     <div class="divider"></div>
     <div class="slbl">이번 달 자산 현황</div>
     <div class="info-box">각 계좌의 실제 잔액·평가액을 입력하면 총 순자산과 수익률을 계산합니다</div>
@@ -354,7 +382,7 @@ const DEF_ISA={나스닥:{avgPrice:0,qty:0},SP500:{avgPrice:0,qty:0},반도체:{
 
 const DEF_TARGETS={적금:500000,나스닥:750000,SP500:450000,반도체:300000,QLD:200000,CMA:300000};
 const DEF_EXP={식비:400000,교통:100000,쇼핑:200000,의료생활:100000,문화여가:100000,기타:100000};
-const DEF_SETTINGS={savingsStart:"2026-07",rentAmount:400000};
+const DEF_SETTINGS={savingsStart:"2026-07",rentAmount:400000,isaYearlyLimit:20000000};
 
 const IMETA={
   적금: {label:"청년미래적금",color:"#2a78d6",sub:""},
@@ -374,7 +402,7 @@ const EMETA={
 };
 const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 
-let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},months:{}};
+let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{}};
 let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, isaPriceVals={}, activeTab="dash";
 let isaLivePrices={}, isaLastFetch=null;
 let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null;
@@ -419,7 +447,7 @@ async function loadFromGist(){
   if(!res.ok)return false;
   const d=await res.json();
   const c=d.files?.[GIST_FILE]?.content;
-  if(c){appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},months:{},...JSON.parse(c)};return true;}
+  if(c){appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{},...JSON.parse(c)};return true;}
   return false;
 }
 async function saveToGist(){
@@ -550,6 +578,12 @@ function updateExpTotal(){
 
 // ── 저장 ──
 async function saveMonth(){
+  // 자동 계산 항목
+  const monthlyISA=calcMonthlyISA(curMonth);
+  inputVals.적금=500000;
+  inputVals.나스닥=monthlyISA.나스닥?.cost||0;
+  inputVals.SP500=monthlyISA.SP500?.cost||0;
+  inputVals.반도체=monthlyISA.반도체?.cost||0;
   appData.months[curMonth]={...appData.months[curMonth],...inputVals};
   setSB("syncing","저장 중...");
   const btn=document.getElementById("save-btn");btn.textContent="저장 중...";btn.disabled=true;
@@ -972,10 +1006,130 @@ async function saveISAHoldings(){
   if(ok)renderAll();
 }
 
+// ── 연금저축 거래 ──
+function calcPensionHoldings(){
+  const txs=appData.pensionTransactions||[];
+  const h={};
+  ISA_ETF_KEYS.forEach(k=>{
+    const et=txs.filter(t=>t.etf===k);
+    const totalQty=et.reduce((s,t)=>s+t.qty,0);
+    const totalCost=et.reduce((s,t)=>s+t.price*t.qty,0);
+    h[k]={totalQty,totalCost,avgPrice:totalQty>0?Math.round(totalCost/totalQty):0};
+  });
+  return h;
+}
+
+function renderPensionPortfolio(){
+  const h=calcPensionHoldings();
+  const lbl=document.getElementById("pension-pf-lbl");
+  const el=document.getElementById("pension-portfolio");
+  if(!lbl||!el)return;
+  const hasH=ISA_ETF_KEYS.some(k=>h[k]?.totalQty>0);
+  if(!hasH){
+    lbl.style.display="none";
+    el.innerHTML=`<div class="card" style="margin-bottom:10px;text-align:center;padding:20px 16px;color:var(--text3)"><div style="font-size:24px;margin-bottom:8px">📊</div><div style="font-size:12px">입력 탭 → 연금저축 매수 거래 입력 후<br>포트폴리오가 표시됩니다</div></div>`;
+    return;
+  }
+  lbl.style.display="block";
+  let totalCost=0,totalValue=0;
+  const rows=ISA_ETF_KEYS.map(k=>{
+    const qty=h[k]?.totalQty||0,avgPrice=h[k]?.avgPrice||0,cost=h[k]?.totalCost||0,cur=isaLivePrices[k]||0;
+    const value=cur>0?cur*qty:0,pnl=value-cost,ret=cost>0&&cur>0?(pnl/cost*100):null;
+    totalCost+=cost;if(cur>0)totalValue+=value;
+    return{k,qty,avgPrice,cur,cost,value,pnl,ret};
+  });
+  const totalPnl=totalValue-totalCost,totalRet=totalCost>0&&totalValue>0?(totalPnl/totalCost*100):null;
+  const trows=rows.filter(r=>r.qty>0).map(r=>{
+    const col=ISA_ETF[r.k].color,nm=ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","");
+    const retStr=r.ret!==null?`${r.ret>=0?"+":""}${r.ret.toFixed(2)}%`:"—";
+    const retCol=r.ret===null?"var(--text3)":r.ret>=0?"var(--green)":"var(--red)";
+    return`<tr>
+      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}<div style="font-size:10px;color:var(--text3)">평단 ${r.avgPrice>0?r.avgPrice.toLocaleString()+"원":"—"}${r.cur>0?` · 현재 ${r.cur.toLocaleString()}원`:""}</div></td>
+      <td class="tr" style="font-size:11px">${r.qty}주</td>
+      <td class="tr" style="font-size:11px">${fwS(r.cost)}</td>
+      <td class="tr" style="font-size:11px">${r.cur>0?fwS(r.value):"—"}</td>
+      <td class="tr" style="font-size:11px;color:${r.pnl>=0?"var(--green)":"var(--red)"}">${r.cur>0?(r.pnl>=0?"":"-")+fwS(Math.abs(r.pnl)):"—"}</td>
+      <td class="tr hl" style="font-size:11px;color:${retCol}">${retStr}</td>
+    </tr>`;
+  }).join("");
+  el.innerHTML=`<div class="card" style="margin-bottom:10px;overflow-x:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="clbl" style="margin-bottom:0">보유 ETF${totalRet!==null?` · <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}</div>
+      <span style="font-size:11px;color:var(--text3)">회사 지원 포함</span>
+    </div>
+    <table style="min-width:340px">
+      <thead><tr>${["종목","수량","매입","평가","손익","수익률"].map(h=>`<td class="${h!=="종목"?"tr":""}" style="font-size:10px;color:var(--text3);font-weight:500">${h}</td>`).join("")}</tr></thead>
+      <tbody>${trows}</tbody>
+      <tfoot><tr style="border-top:1px solid var(--border-s)">
+        <td colspan="2" style="font-size:11px;font-weight:500;padding-top:6px">합계</td>
+        <td class="tr" style="font-size:11px;font-weight:500;padding-top:6px">${fwS(totalCost)}</td>
+        <td class="tr" style="font-size:11px;font-weight:500;padding-top:6px">${totalValue>0?fwS(totalValue):"—"}</td>
+        <td class="tr" style="font-size:11px;font-weight:500;padding-top:6px;color:${totalPnl>=0?"var(--green)":"var(--red)"}">${totalValue>0?(totalPnl>=0?"":"-")+fwS(Math.abs(totalPnl)):"—"}</td>
+        <td class="tr hl" style="font-size:11px;padding-top:6px;color:${totalRet!==null?(totalRet>=0?"var(--green)":"var(--red)"):"var(--text3)"}">${totalRet!==null?(totalRet>=0?"+":"")+totalRet.toFixed(2)+"%":"—"}</td>
+      </tr></tfoot>
+    </table>
+  </div>`;
+}
+
+function renderPensionTxList(){
+  const txs=[...(appData.pensionTransactions||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const el=document.getElementById("ptx-list");if(!el)return;
+  if(txs.length===0){el.innerHTML=`<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">아직 거래 내역이 없습니다</div>`;return;}
+  el.innerHTML=`<div class="slbl">연금저축 거래 내역 (${txs.length}건)</div>`+txs.map(t=>{
+    const col=ISA_ETF[t.etf]?.color||"#898781",nm=(ISA_ETF[t.etf]?.label||t.etf).replace("TIGER ","").replace("(합성)","");
+    return`<div class="card" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;padding:10px 12px">
+      <div><div style="font-size:12px;color:var(--text3)">${t.date}</div><div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px"><span class="dot" style="background:${col}"></span>${nm}</div></div>
+      <div style="text-align:right;flex:1;margin:0 10px"><div style="font-size:13px">${t.price.toLocaleString()}원 × ${t.qty}주</div><div style="font-size:12px;color:var(--text3)">${(t.price*t.qty).toLocaleString()}원</div></div>
+      <button onclick="deletePensionTransaction('${t.id}')" style="background:none;border:0.5px solid var(--border-s);color:var(--text3);padding:5px 8px;border-radius:var(--radius);cursor:pointer;font-size:11px">삭제</button>
+    </div>`;
+  }).join("");
+}
+
+function initPtxDate(){
+  const el=document.getElementById("ptx-date");
+  if(el&&!el.value){const n=new Date();el.value=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;}
+}
+
+function renderPtxPreview(){
+  const price=parseInt(document.getElementById("ptx-price")?.value)||0;
+  const qty=parseInt(document.getElementById("ptx-qty")?.value)||0;
+  const el=document.getElementById("ptx-preview");
+  if(el)el.textContent=price>0&&qty>0?`매수 금액: ${(price*qty).toLocaleString()}원`:"";
+}
+
+async function addPensionTransaction(){
+  const etf=document.getElementById("ptx-etf")?.value,date=document.getElementById("ptx-date")?.value;
+  const price=parseInt(document.getElementById("ptx-price")?.value)||0,qty=parseInt(document.getElementById("ptx-qty")?.value)||0;
+  if(!etf||!date||price<=0||qty<=0){showToast("날짜·단가·수량을 모두 입력하세요");return;}
+  if(!appData.pensionTransactions)appData.pensionTransactions=[];
+  appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,etf,date,price,qty});
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  if(ok){showToast("거래 추가됐습니다 ✓");document.getElementById("ptx-price").value="";document.getElementById("ptx-qty").value="";document.getElementById("ptx-preview").textContent="";renderPensionTxList();renderPensionPortfolio();}
+}
+
+async function deletePensionTransaction(id){
+  appData.pensionTransactions=(appData.pensionTransactions||[]).filter(t=>t.id!==id);
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  if(ok){showToast("삭제됐습니다");renderPensionTxList();renderPensionPortfolio();}
+}
+
+// ── ISA 연간 납입한도 ──
+function calcISAYearlyUsage(){
+  const year=new Date().getFullYear(),months=appData.months;
+  let usage=0;
+  Object.keys(months).forEach(m=>{if(m.startsWith(String(year))){const md=months[m];usage+=(md.나스닥||0)+(md.SP500||0)+(md.반도체||0);}});
+  const limit=appData.settings?.isaYearlyLimit||20000000,remaining=limit-usage,pct=Math.min(Math.round(usage/limit*100),100);
+  return{usage,limit,remaining,pct,year};
+}
+
 // ── 렌더링 ──
 function renderAll(){
-  if(activeTab==="dash")   {renderDash();renderISAPortfolio();}
-  if(activeTab==="input")  {renderInput();renderTxList();initTxDate();document.getElementById("tx-price")?.addEventListener("input",renderTxPreview);document.getElementById("tx-qty")?.addEventListener("input",renderTxPreview);}
+  if(activeTab==="dash")   {renderDash();renderISAPortfolio();renderPensionPortfolio();}
+  if(activeTab==="input")  {renderInput();renderTxList();renderPensionTxList();initTxDate();initPtxDate();document.getElementById("tx-price")?.addEventListener("input",renderTxPreview);document.getElementById("tx-qty")?.addEventListener("input",renderTxPreview);document.getElementById("ptx-price")?.addEventListener("input",renderPtxPreview);document.getElementById("ptx-qty")?.addEventListener("input",renderPtxPreview);}
   if(activeTab==="expense")renderExpense();
   if(activeTab==="chart")  renderChart();
   if(activeTab==="set")    {renderSettings();}
@@ -1101,9 +1255,22 @@ function renderDash(){
   const expTotal=ECATS.reduce((s,c)=>s+(expData[c]||0),0);
   const expBgt=ECATS.reduce((s,c)=>s+((appData.expTargets||DEF_EXP)[c]||0),0);
 
-  const showExtra=true;
+  const isaLimit=calcISAYearlyUsage();
   document.getElementById("extra-lbl").style.display="block";
   document.getElementById("extra-cards").innerHTML=`
+    <!-- ISA 연간 납입한도 -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="slval">ISA 연간 납입한도 (${isaLimit.year}년)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 6px">
+        <span style="font-size:13px;color:var(--text2)">올해 납입액</span>
+        <span style="font-size:15px;font-weight:500">${fw(isaLimit.usage)} <span style="font-size:12px;color:var(--text3)">/ ${fw(isaLimit.limit)}</span></span>
+      </div>
+      <div class="pbar"><div class="pfill" style="width:${isaLimit.pct}%;background:${isaLimit.pct>=90?"var(--red)":isaLimit.pct>=70?"var(--amber)":"var(--accent)"}"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <span style="font-size:12px;color:var(--text3)">잔여 한도</span>
+        <span style="font-size:12px;font-weight:500;color:${isaLimit.remaining<=0?"var(--red)":"var(--text)"}">${isaLimit.remaining>0?fw(isaLimit.remaining):"한도 소진"}</span>
+      </div>
+    </div>
     <!-- D-day -->
     <div class="card" style="margin-bottom:10px">
       <div class="slval">청년미래적금 만기 D-day</div>
@@ -1170,44 +1337,66 @@ function renderDash(){
 function renderInput(){
   const mData=appData.months[curMonth]||{};
   inputVals={...mData};
+
+  // 이번달 ISA 거래 자동계산
+  const monthlyISA=calcMonthlyISA(curMonth);
+
+  // 실수령 월급
   const sal=mData.salary||0;
   const si=document.getElementById("inp-salary"),se=document.getElementById("ei-salary");
   if(si)si.value=sal>0?sal/10000:"";
   if(se)se.textContent=fw(sal);
-  document.getElementById("input-cats").innerHTML=ICATS.map(c=>{
-    const t=appData.targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
-    const sub=IMETA[c].sub?`<div class="csub">${IMETA[c].sub}</div>`:"";
-    return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" id="ei-${c}" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" id="ep-${c}" style="width:${p}%;background:${col}"></div></div><div class="irow"><input type="number" id="inp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncInv('${c}')"><span class="unit">만원</span><button class="bsm" onclick="fillInv('${c}')">목표치</button></div></div>`;
-  }).join("");
+
+  // 자동 입력 항목 표시 (읽기 전용)
+  const autoItems=[
+    {label:"청년미래적금", color:"#2a78d6", val:500000, note:"매월 50만원 고정"},
+    {label:"ISA 나스닥100", color:"#1baf7a", val:monthlyISA.나스닥?.cost||0, note:"거래 내역 자동계산"},
+    {label:"ISA S&P500",   color:"#3b6d11", val:monthlyISA.SP500?.cost||0,   note:"거래 내역 자동계산"},
+    {label:"ISA 반도체",   color:"#eda100", val:monthlyISA.반도체?.cost||0,  note:"거래 내역 자동계산"},
+  ];
+  const autoTotal=autoItems.reduce((s,a)=>s+a.val,0);
+
+  // 직접 입력 항목 (QLD, CMA)
+  const manualCats=["QLD","CMA"];
+
+  document.getElementById("input-cats").innerHTML=`
+    <div class="slbl">자동 입력 항목</div>
+    <div class="card" style="margin-bottom:10px">
+      ${autoItems.map(a=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="dot" style="background:${a.color}"></span>
+            <span style="font-size:13px">${a.label}</span>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:13px;font-weight:500;color:${a.color}">${fw(a.val)}</div>
+            <div style="font-size:10px;color:var(--text3)">${a.note}</div>
+          </div>
+        </div>`).join("")}
+      <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:500">
+        <span>소계</span><span>${fw(autoTotal)}</span>
+      </div>
+    </div>
+    <div class="slbl">직접 입력 항목</div>
+    ${manualCats.map(c=>{
+      const t=appData.targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
+      return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div><div class="csub">${c==="QLD"?"레버리지 ETF":"유동 조정 가능"}</div></div><div class="cright"><div class="cval" id="ei-${c}" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" id="ep-${c}" style="width:${p}%;background:${col}"></div></div><div class="irow"><input type="number" id="inp-${c}" placeholder="${t/10000}" value="${a>0?a/10000:''}" min="0" step="1" oninput="syncInv('${c}')"><span class="unit">만원</span><button class="bsm" onclick="fillInv('${c}')">목표치</button></div></div>`;
+    }).join("")}
+  `;
   document.getElementById("save-btn").textContent=`${dispM(curMonth)} 저장 및 동기화`;
 
   // 자산 현황 입력
   const snap=mData.assetSnapshot||{};
   assetVals={...snap};
-
-  // 청년미래적금 자동계산값
   const cumul2={}; ICATS.forEach(c=>cumul2[c]=0);
   Object.keys(appData.months).forEach(m=>{const md=appData.months[m]||{};ICATS.forEach(c=>{cumul2[c]=(cumul2[c]||0)+(md[c]||0);});});
-
   document.getElementById("asset-inputs").innerHTML=ASSET_META.map(a=>{
     const val=snap[a.key]||0;
     const autoVal=a.key==="savingsBalance"?Math.round(cumul2.적금/10000):0;
-    return`<div class="card">
-      <div class="chdr" style="margin-bottom:8px">
-        <div>
-          <div class="cname"><span class="dot" style="background:${a.color}"></span>${a.label}</div>
-          <div class="csub">${a.hint}</div>
-        </div>
-        <div class="cright"><div class="cval" id="av-${a.key}" style="color:${a.color}">${fw(val)}</div></div>
-      </div>
-      <div class="irow">
-        <input type="number" id="ai-${a.key}" placeholder="${autoVal||0}" value="${val>0?Math.round(val/10000):''}" min="0" step="0.1" oninput="syncAsset('${a.key}')">
-        <span class="unit">만원</span>
-        ${a.key==="savingsBalance"&&autoVal>0?`<button class="bsm" onclick="fillAsset('${a.key}',${autoVal})">자동입력</button>`:""}
-      </div>
-    </div>`;
+    return`<div class="card"><div class="chdr" style="margin-bottom:8px"><div><div class="cname"><span class="dot" style="background:${a.color}"></span>${a.label}</div><div class="csub">${a.hint}</div></div><div class="cright"><div class="cval" id="av-${a.key}" style="color:${a.color}">${fw(val)}</div></div></div><div class="irow"><input type="number" id="ai-${a.key}" placeholder="${autoVal||0}" value="${val>0?Math.round(val/10000):''}" min="0" step="0.1" oninput="syncAsset('${a.key}')"><span class="unit">만원</span>${a.key==="savingsBalance"&&autoVal>0?`<button class="bsm" onclick="fillAsset('${a.key}',${autoVal})">자동입력</button>`:""}</div></div>`;
   }).join("");
   document.getElementById("asset-save-btn").textContent=`${dispM(curMonth)} 자산 현황 저장`;
+}
 }
 
 function renderExpense(){
@@ -1298,7 +1487,23 @@ function renderChart(){
     </tr>`;
   }).join("");
   const lgH=ICATS.map(c=>`<span class="lgitem"><span class="lgdot" style="background:${IMETA[c].color}"></span>${IMETA[c].label}</span>`).join("");
+  // 순자산 히스토리 차트
+  const nwMonths=sortedM.filter(m=>months[m]?.assetSnapshot);
+  let nwChartHTML="";
+  if(nwMonths.length>=2){
+    const nwLabels=nwMonths.map(m=>dispM(m).replace("년 ","년\n"));
+    const nwData=nwMonths.map(m=>{
+      const s=months[m].assetSnapshot||{};
+      return(s.cmaBalance||0)+(s.isaValue||0)+(s.pensionValue||0)+(s.qldValue||0)+(s.savingsBalance||0)+(s.cashEtc||0);
+    });
+    nwChartHTML=`<div class="cchart">
+      <div class="clbl">월별 순자산 히스토리</div>
+      <div style="position:relative;height:200px"><canvas id="nwChart" role="img" aria-label="순자산 히스토리 차트"></canvas></div>
+    </div>`;
+  }
+
   ca.innerHTML=`
+    ${nwChartHTML}
     <div class="cchart">
       <div class="clbl">카테고리별 누적 금액</div>
       <div class="legend">${lgH}</div>
@@ -1317,6 +1522,7 @@ function renderChart(){
         <tbody>${tableRows}</tbody>
       </table>
     </div>`;
+
   if(areaInst)areaInst.destroy();
   areaInst=new Chart(document.getElementById("areaChart").getContext("2d"),{
     type:"line",data:{labels,datasets},
@@ -1325,6 +1531,25 @@ function renderChart(){
       plugins:{legend:{display:false},tooltip:{mode:"index",intersect:false,callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fw(ctx.raw)}`}}}
     }
   });
+
+  if(nwMonths.length>=2){
+    const nwLabels=nwMonths.map(m=>dispM(m).replace("년 ","년\n"));
+    const nwData=nwMonths.map(m=>{
+      const s=months[m].assetSnapshot||{};
+      return(s.cmaBalance||0)+(s.isaValue||0)+(s.pensionValue||0)+(s.qldValue||0)+(s.savingsBalance||0)+(s.cashEtc||0);
+    });
+    const nwCtx=document.getElementById("nwChart")?.getContext("2d");
+    if(nwCtx){
+      new Chart(nwCtx,{
+        type:"line",
+        data:{labels:nwLabels,datasets:[{label:"순자산",data:nwData,borderColor:"var(--accent)",backgroundColor:"var(--accent-bg)",fill:true,tension:.3,pointRadius:4,borderWidth:2}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          scales:{x:{ticks:{font:{size:10},color:"#898781"},grid:{color:"rgba(128,128,128,0.12)"}},y:{ticks:{font:{size:10},color:"#898781",callback:v=>`${Math.round(v/10000)}만`},grid:{color:"rgba(128,128,128,0.12)"}}},
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 순자산: ${fw(ctx.raw)}`}}}
+        }
+      });
+    }
+  }
 }
 
 function renderSettings(){
