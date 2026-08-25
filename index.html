@@ -1231,6 +1231,10 @@ function renderDash(){
   const totalCum=ICATS.reduce((s,c)=>s+(cumul[c]||0),0);
   const isaCum=["나스닥","SP500","반도체"].reduce((s,c)=>s+(cumul[c]||0),0);
 
+  // 이번달 ISA 거래 합산 (저장 전에도 반영)
+  const monthlyISANow=calcMonthlyISA(curMonth);
+  const pensionTotal=(appData.pensionTransactions||[]).reduce((s,t)=>s+t.price*t.qty,0);
+
   document.getElementById("hdr-sub").textContent=`월급 380만원 · 누적 ${fw(totalCum)}`;
   document.getElementById("summ-cards").innerHTML=[
     {l:"총 누적 투자",v:fw(totalCum),col:"var(--accent)"},
@@ -1257,24 +1261,13 @@ function renderDash(){
     </div>
     <div class="pbar" style="margin:10px 0 0"><div class="pfill" style="width:${pNow}%;background:var(--accent)"></div></div>`;
 
-  // ISA 납입액 카드
-  const monthlyISAData=calcMonthlyISA(curMonth);
-  const isaMonthFromTx=ISA_ETF_KEYS.reduce((s,k)=>s+(monthlyISAData[k]?.cost||0),0);
-  const isaMonthDeposit=mData.isaDeposit||0;
-  const isaDepositDisplay=isaMonthDeposit>0?isaMonthDeposit:isaMonthFromTx;
-  const isaTgt=1500000,isaDepPct=pb(isaDepositDisplay,isaTgt);
-  const isaDepEl=document.getElementById("isa-deposit-card");
-  if(isaDepEl){
-    if(isaDepositDisplay>0){
-      isaDepEl.style.display="block";
-      isaDepEl.innerHTML=`<div class="chdr" style="margin-bottom:8px"><div><div class="cname"><span class="dot" style="background:#1baf7a"></span>ISA 납입액</div><div class="csub">목표 150만원/월</div></div><div class="cright"><div class="cval" style="color:#1baf7a">${fw(isaDepositDisplay)}</div>${isaMonthFromTx>0&&isaMonthDeposit===0?`<div class="cmeta">거래 합산</div>`:""}</div></div><div class="pbar"><div class="pfill" style="width:${isaDepPct}%;background:#1baf7a"></div></div>`;
-    } else { isaDepEl.style.display="none"; }
-  }
-
   const isaH=calcISAHoldings();
   document.getElementById("dash-cats").innerHTML=ICATS.map(c=>{
-    const t=targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
+    const t=targets[c]||0,col=IMETA[c].color;
     const isISA=["나스닥","SP500","반도체"].includes(c);
+    // ISA는 거래 합산, 나머지는 저장된 값
+    const a=isISA?(monthlyISANow[c]?.cost||mData[c]||0):(mData[c]||0);
+    const p=pb(a,t);
     const sub=IMETA[c].sub?`<div class="csub">${IMETA[c].sub}</div>`:"";
     let pfInfo="";
     if(isISA){
@@ -1289,8 +1282,24 @@ function renderDash(){
     }
     return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" style="color:${col}">${fw(a)}</div>${!isISA?`<div class="cmeta">목표 ${fw(t)}</div>`:""}</div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${col}"></div></div>${pfInfo}</div>`;
   }).join("");
+  const isaMonthFromTx=ISA_ETF_KEYS.reduce((s,k)=>s+(monthlyISANow[k]?.cost||0),0);
+  const isaMonthDeposit=mData.isaDeposit||0;
+  const isaDepositDisplay=isaMonthDeposit>0?isaMonthDeposit:isaMonthFromTx;
+  const isaTgt=1500000,isaDepPct=pb(isaDepositDisplay,isaTgt);
+  const isaDepEl=document.getElementById("isa-deposit-card");
+  if(isaDepEl){
+    if(isaDepositDisplay>0){
+      isaDepEl.style.display="block";
+      isaDepEl.innerHTML=`<div class="chdr" style="margin-bottom:8px"><div><div class="cname"><span class="dot" style="background:#1baf7a"></span>ISA 납입액</div><div class="csub">목표 150만원/월</div></div><div class="cright"><div class="cval" style="color:#1baf7a">${fw(isaDepositDisplay)}</div>${isaMonthFromTx>0&&isaMonthDeposit===0?`<div class="cmeta">거래 합산</div>`:""}</div></div><div class="pbar"><div class="pfill" style="width:${isaDepPct}%;background:#1baf7a"></div></div>`;
+    } else { isaDepEl.style.display="none"; }
+  }
 
-  const pieData=ICATS.map(c=>({name:IMETA[c].label,val:cumul[c]||0,col:IMETA[c].color})).filter(d=>d.val>0);
+  const pieData=[
+    {name:"청년미래적금", val:cumul.적금||0,  col:"#2a78d6"},
+    {name:"ISA",          val:isaCum||0,        col:"#1baf7a"},
+    {name:"연금저축",     val:pensionTotal||0,  col:"#e34948"},
+    {name:"CMA 목돈",    val:cumul.CMA||0,     col:"#eb6834"},
+  ].filter(d=>d.val>0);
   const pw=document.getElementById("pie-wrap");
   if(pieData.length===0){pw.classList.add("hidden");}else{
     pw.classList.remove("hidden");
