@@ -405,7 +405,7 @@ const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{}};
 let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, isaPriceVals={}, activeTab="dash";
 let isaLivePrices={}, isaLastFetch=null;
-let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null;
+let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null, pensionPfInst=null;
 
 const ASSET_META=[
   {key:"cmaBalance",   label:"CMA 잔액",       color:"#eb6834", hint:"CMA 앱에서 확인"},
@@ -1069,6 +1069,27 @@ function renderPensionPortfolio(){
       </tr></tfoot>
     </table>
   </div>`;
+
+  // 연금저축 비중 도넛 차트
+  const pensionPieData=ISA_ETF_KEYS.map(k=>{
+    const r=rows.find(r=>r.k===k);
+    return{name:ISA_ETF[k].label.replace("TIGER ","").replace("(합성)",""),val:r.value>0?r.value:(r.cost||0),col:ISA_ETF[k].color};
+  }).filter(d=>d.val>0);
+  const pensionPieTotal=pensionPieData.reduce((s,d)=>s+d.val,0);
+  if(pensionPieData.length>0){
+    const pieDiv=document.createElement("div");
+    pieDiv.className="cchart";
+    pieDiv.style.marginBottom="10px";
+    pieDiv.innerHTML=`
+      <div class="clbl">연금저축 ETF 비중 (${totalValue>0?"평가금액":"매입금액"} 기준)</div>
+      <div class="legend">${pensionPieData.map(d=>`<span class="lgitem"><span class="lgdot" style="background:${d.col}"></span>${d.name} ${pensionPieTotal>0?Math.round(d.val/pensionPieTotal*100):0}%</span>`).join("")}</div>
+      <div style="position:relative;height:180px"><canvas id="pensionPfChart" role="img" aria-label="연금저축 ETF 비중 차트"></canvas></div>`;
+    el.appendChild(pieDiv);
+    if(pensionPfInst)pensionPfInst.destroy();
+    const surf=getComputedStyle(document.documentElement).getPropertyValue("--surface")||"#fff";
+    const ctx=document.getElementById("pensionPfChart")?.getContext("2d");
+    if(ctx){pensionPfInst=new Chart(ctx,{type:"doughnut",data:{labels:pensionPieData.map(d=>d.name),datasets:[{data:pensionPieData.map(d=>d.val),backgroundColor:pensionPieData.map(d=>d.col),borderWidth:2,borderColor:surf}]},options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.label}: ${pensionPieTotal>0?Math.round(c.raw/pensionPieTotal*100):0}%`}}}}});}
+  }
 }
 
 function renderPensionTxList(){
@@ -1224,10 +1245,25 @@ function renderDash(){
     </div>
     <div class="pbar" style="margin:10px 0 0"><div class="pfill" style="width:${pNow}%;background:var(--accent)"></div></div>`;
 
+  const isaH=calcISAHoldings();
   document.getElementById("dash-cats").innerHTML=ICATS.map(c=>{
     const t=targets[c]||0,a=mData[c]||0,p=pb(a,t),col=IMETA[c].color;
     const sub=IMETA[c].sub?`<div class="csub">${IMETA[c].sub}</div>`:"";
-    return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${col}"></div></div></div>`;
+    let pfInfo="";
+    if(["나스닥","SP500","반도체"].includes(c)){
+      const h=isaH[c],cur=isaLivePrices[c]||0;
+      if(h&&h.totalQty>0){
+        const value=cur>0?cur*h.totalQty:0,pnl=value-h.totalCost;
+        const ret=h.totalCost>0&&cur>0?(pnl/h.totalCost*100):null;
+        pfInfo=`<div style="display:flex;justify-content:space-between;font-size:11px;padding-top:6px;margin-top:6px;border-top:0.5px solid var(--border)">
+          <span style="color:var(--text3)">${h.totalQty}주 · 평단 ${h.avgPrice>0?h.avgPrice.toLocaleString()+"원":"—"}</span>
+          <span style="color:${ret!==null?(ret>=0?"var(--green)":"var(--red)"):"var(--text3)"}">
+            ${value>0?fwS(value):"—"}${ret!==null?` (${ret>=0?"+":""}${ret.toFixed(1)}%)`:""}
+          </span>
+        </div>`;
+      }
+    }
+    return`<div class="card"><div class="chdr"><div><div class="cname"><span class="dot" style="background:${col}"></span>${IMETA[c].label}</div>${sub}</div><div class="cright"><div class="cval" style="color:${col}">${fw(a)}</div><div class="cmeta">목표 ${fw(t)}</div></div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${col}"></div></div>${pfInfo}</div>`;
   }).join("");
 
   const pieData=ICATS.map(c=>({name:IMETA[c].label,val:cumul[c]||0,col:IMETA[c].color})).filter(d=>d.val>0);
