@@ -864,25 +864,25 @@ function handleTxFile(event){
   const file=event.target.files[0];event.target.value="";
   if(file)importTxFile(file);
 }
+function txPreviewLine(p){
+  const nm=(ISA_ETF[p.etf]?.label||p.etf).replace("TIGER ","").replace("(합성)","");
+  return`${p.date}  ${nm}  ${p.qty}주 · ${p.price.toLocaleString()}원`;
+}
 async function importTxFile(file){
   const text=await file.text();
   const parsed=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","삼성전자"]);
   if(parsed.length===0){showToast("인식된 매수 내역이 없습니다");return;}
   if(!appData.transactions)appData.transactions=[];
   const existing=new Set(appData.transactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}`));
-  let added=0;
-  parsed.forEach(p=>{
-    const sig=`${p.date}|${p.etf}|${p.qty}|${p.price}`;
-    if(existing.has(sig))return;
-    existing.add(sig);
-    appData.transactions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p});
-    added++;
-  });
-  if(added===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  const toAdd=parsed.filter(p=>!existing.has(`${p.date}|${p.etf}|${p.qty}|${p.price}`));
+  if(toAdd.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  const preview=toAdd.map(txPreviewLine).join("\n");
+  if(!confirm(`[ISA] 아래 ${toAdd.length}건을 추가합니다.\n\n${preview}`))return;
+  toAdd.forEach(p=>appData.transactions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  if(ok){showToast(`${added}건 추가됐습니다 ✓`);renderTxList();renderISAPortfolio();}
+  if(ok){showToast(`${toAdd.length}건 추가됐습니다 ✓`);renderTxList();renderISAPortfolio();}
 }
 async function addTransaction(){
   const etf=document.getElementById("tx-etf")?.value;
@@ -1213,19 +1213,15 @@ async function importPtxFile(file){
   if(parsed.length===0){showToast("인식된 매수 내역이 없습니다");return;}
   if(!appData.pensionTransactions)appData.pensionTransactions=[];
   const existing=new Set(appData.pensionTransactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}`));
-  let added=0;
-  parsed.forEach(p=>{
-    const sig=`${p.date}|${p.etf}|${p.qty}|${p.price}`;
-    if(existing.has(sig))return;
-    existing.add(sig);
-    appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p});
-    added++;
-  });
-  if(added===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  const toAdd=parsed.filter(p=>!existing.has(`${p.date}|${p.etf}|${p.qty}|${p.price}`));
+  if(toAdd.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  const preview=toAdd.map(txPreviewLine).join("\n");
+  if(!confirm(`[연금저축] 아래 ${toAdd.length}건을 추가합니다.\n\n${preview}`))return;
+  toAdd.forEach(p=>appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  if(ok){showToast(`${added}건 추가됐습니다 ✓`);renderPensionTxList();renderPensionPortfolio();}
+  if(ok){showToast(`${toAdd.length}건 추가됐습니다 ✓`);renderPensionTxList();renderPensionPortfolio();}
 }
 async function addPensionTransaction(){
   const etf=document.getElementById("ptx-etf")?.value,date=document.getElementById("ptx-date")?.value;
