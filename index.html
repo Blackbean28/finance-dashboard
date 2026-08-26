@@ -253,6 +253,7 @@
     <div id="input-cats"></div>
     <button class="bprimary" id="save-btn" onclick="saveMonth()">저장 및 동기화</button>
     <div class="divider"></div>
+    <div id="isa-alloc-suggestion"></div>
     <div class="slbl">ISA 매수 거래 입력</div>
     <div class="card" style="margin-bottom:10px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -395,6 +396,14 @@ const ISA_ETF={
   배당다우존스: {label:"TIGER 미국배당다우존스",       color:"#8a63d2", ncode:"458730"},
 };
 const ISA_ETF_KEYS=Object.keys(ISA_ETF);
+function maBadge(k){
+  const cur=isaLivePrices[k],ma=isaMA50[k];
+  if(!cur||!ma)return"";
+  const diff=(cur-ma)/ma*100;
+  const col=diff<=0?"var(--green)":"var(--red)";
+  const word=diff<=0?"저가 구간":"고가 구간";
+  return` · <span style="color:${col}">MA50 ${diff>=0?"+":""}${diff.toFixed(1)}% (${word})</span>`;
+}
 const TX_NAME_RULES=[
   [/레버리지/, "레버리지"],
   [/필라델피아반도체/, "반도체"],
@@ -451,6 +460,7 @@ const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{}};
 let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, isaPriceVals={}, activeTab="dash";
 let isaLivePrices={}, isaLastFetch=null;
+let isaMA50={}, isaMA200={};
 let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null, pensionPfInst=null;
 
 const ASSET_META=[
@@ -851,6 +861,31 @@ function calcISAHoldings(){
   return h;
 }
 
+function renderAllocSuggestion(){
+  const el=document.getElementById("isa-alloc-suggestion");if(!el)return;
+  const keys=["나스닥","SP500","반도체"];
+  const monthly=calcMonthlyISA(curMonth);
+  const rows=keys.map(k=>{
+    const target=appData.targets[k]||0;
+    const bought=monthly[k]?.cost||0;
+    return{k,target,bought,remaining:Math.max(0,target-bought)};
+  });
+  const totalRemaining=rows.reduce((s,r)=>s+r.remaining,0);
+  if(totalRemaining<=0){
+    el.innerHTML=`<div class="card" style="margin-bottom:10px;padding:14px 16px;color:var(--text3);font-size:12px;text-align:center">${dispM(curMonth)} 목표 배분을 이미 다 채우셨습니다 ✓</div>`;
+    return;
+  }
+  const sorted=rows.filter(r=>r.remaining>0).sort((a,b)=>b.remaining-a.remaining);
+  el.innerHTML=`<div class="card" style="margin-bottom:10px">
+    <div class="slval" style="margin-bottom:8px">${dispM(curMonth)} 매수 배분 제안 <span style="font-size:10px;color:var(--text3);font-weight:400">(목표 대비 남은 금액 기준)</span></div>
+    ${sorted.map(r=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border)">
+        <span style="font-size:13px;display:flex;align-items:center;gap:6px"><span class="dot" style="background:${ISA_ETF[r.k].color}"></span>${ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","")}${maBadge(r.k)}</span>
+        <span style="font-size:13px;font-weight:500">${fw(r.remaining)} 추천</span>
+      </div>`).join("")}
+    <div style="font-size:11px;color:var(--text3);padding-top:6px">목표까지 남은 총액 ${fw(totalRemaining)} · MA50은 참고용이며 매수 신호가 아닙니다</div>
+  </div>`;
+}
 function calcMonthlyISA(month){
   const txs=(appData.transactions||[]).filter(t=>t.date.startsWith(month));
   const r={};
@@ -970,6 +1005,8 @@ async function fetchISAETFPrices(showToastMsg=false){
       ISA_ETF_KEYS.forEach(k=>{
         const p=data.prices[k];
         if(p&&p>0){isaLivePrices[k]=p;anySuccess=true;}
+        if(data.ma50?.[k]>0)isaMA50[k]=data.ma50[k];
+        if(data.ma200?.[k]>0)isaMA200[k]=data.ma200[k];
       });
     }
     isaLastFetch=new Date();
@@ -983,6 +1020,7 @@ async function fetchISAETFPrices(showToastMsg=false){
   renderISAPortfolio();
   renderPensionPortfolio();
   renderDash();
+  renderAllocSuggestion();
 }
 
 // ── ISA 포트폴리오 ──
@@ -1016,7 +1054,7 @@ function renderISAPortfolio(){
     const retCol=r.ret===null?"var(--text3)":r.ret>=0?"var(--green)":"var(--red)";
     const hasCur=r.cur>0;
     return`<tr>
-      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}${hasCur?`<div style="font-size:10px;color:var(--text3)">${r.cur.toLocaleString()}원</div>`:""}
+      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}${hasCur?`<div style="font-size:10px;color:var(--text3)">${r.cur.toLocaleString()}원${maBadge(r.k)}</div>`:""}
       <div style="font-size:10px;color:var(--text3)">평단 ${r.avgPrice>0?r.avgPrice.toLocaleString()+"원":"—"}</div></td>
       <td class="tr" style="font-size:11px">${r.qty>0?r.qty+"주":"—"}</td>
       <td class="tr" style="font-size:11px">${r.cost>0?fwS(r.cost):"—"}</td>
@@ -1165,7 +1203,7 @@ function renderPensionPortfolio(){
     const retStr=r.ret!==null?`${r.ret>=0?"+":""}${r.ret.toFixed(2)}%`:"—";
     const retCol=r.ret===null?"var(--text3)":r.ret>=0?"var(--green)":"var(--red)";
     return`<tr>
-      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}<div style="font-size:10px;color:var(--text3)">평단 ${r.avgPrice>0?r.avgPrice.toLocaleString()+"원":"—"}${r.cur>0?` · 현재 ${r.cur.toLocaleString()}원`:""}</div></td>
+      <td style="font-size:11px;font-weight:500"><span class="dot" style="background:${col};margin-right:3px"></span>${nm}<div style="font-size:10px;color:var(--text3)">평단 ${r.avgPrice>0?r.avgPrice.toLocaleString()+"원":"—"}${r.cur>0?` · 현재 ${r.cur.toLocaleString()}원${maBadge(r.k)}`:""}</div></td>
       <td class="tr" style="font-size:11px">${r.qty}주</td>
       <td class="tr" style="font-size:11px">${fwS(r.cost)}</td>
       <td class="tr" style="font-size:11px">${r.cur>0?fwS(r.value):"—"}</td>
@@ -1292,7 +1330,7 @@ function calcISAYearlyUsage(){
 // ── 렌더링 ──
 function renderAll(){
   if(activeTab==="dash")   {renderDash();renderISAPortfolio();renderPensionPortfolio();}
-  if(activeTab==="input")  {renderInput();renderTxList();renderPensionTxList();initTxDate();initPtxDate();document.getElementById("tx-price")?.addEventListener("input",renderTxPreview);document.getElementById("tx-qty")?.addEventListener("input",renderTxPreview);document.getElementById("ptx-price")?.addEventListener("input",renderPtxPreview);document.getElementById("ptx-qty")?.addEventListener("input",renderPtxPreview);}
+  if(activeTab==="input")  {renderInput();renderTxList();renderPensionTxList();renderAllocSuggestion();initTxDate();initPtxDate();document.getElementById("tx-price")?.addEventListener("input",renderTxPreview);document.getElementById("tx-qty")?.addEventListener("input",renderTxPreview);document.getElementById("ptx-price")?.addEventListener("input",renderPtxPreview);document.getElementById("ptx-qty")?.addEventListener("input",renderPtxPreview);}
   if(activeTab==="expense")renderExpense();
   if(activeTab==="chart")  renderChart();
   if(activeTab==="set")    {renderSettings();}
