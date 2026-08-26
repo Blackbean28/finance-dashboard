@@ -804,6 +804,40 @@ async function resetAll(){
   inputVals={};expVals={};showToast("초기화됐습니다");renderAll();
 }
 
+// ── XIRR (실질/연환산 수익률) ──
+function xirr(cashflows){
+  if(cashflows.length<2)return null;
+  const sorted=[...cashflows].sort((a,b)=>a.date-b.date);
+  const d0=sorted[0].date;
+  const t=cf=>(cf.date-d0)/(1000*60*60*24*365);
+  const npv=r=>sorted.reduce((s,cf)=>s+cf.amount/Math.pow(1+r,t(cf)),0);
+  const dnpv=r=>sorted.reduce((s,cf)=>{const ti=t(cf);return ti===0?s:s-ti*cf.amount/Math.pow(1+r,ti+1);},0);
+  let r=0.1;
+  for(let i=0;i<100;i++){
+    const f=npv(r),df=dnpv(r);
+    if(Math.abs(df)<1e-9)break;
+    const nr=r-f/df;
+    if(!isFinite(nr)||nr<=-1)break;
+    if(Math.abs(nr-r)<1e-7)return nr;
+    r=nr;
+  }
+  let lo=-0.99,hi=10,flo=npv(lo),fhi=npv(hi);
+  if(flo*fhi>0)return null;
+  for(let i=0;i<200;i++){
+    const mid=(lo+hi)/2,fm=npv(mid);
+    if(Math.abs(fm)<1e-6)return mid;
+    if((flo<0)===(fm<0)){lo=mid;flo=fm;}else{hi=mid;fhi=fm;}
+  }
+  return(lo+hi)/2;
+}
+function calcXIRR(txs,totalValue){
+  if(!txs||txs.length===0||totalValue<=0)return null;
+  const cfs=txs.map(t=>({date:new Date(t.date),amount:-(t.price*t.qty)}));
+  cfs.push({date:new Date(),amount:totalValue});
+  const r=xirr(cfs);
+  return(r!==null&&isFinite(r))?r:null;
+}
+
 // ── ISA 거래 내역 ──
 function calcISAHoldings(){
   const txs=appData.transactions||[];
@@ -975,6 +1009,7 @@ function renderISAPortfolio(){
   });
   const totalPnl=totalValue-totalCost;
   const totalRet=totalCost>0&&totalValue>0?(totalPnl/totalCost*100):null;
+  const isaXirr=calcXIRR(appData.transactions,totalValue);
   const trows=rows.map(r=>{
     const col=ISA_ETF[r.k].color,nm=ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","");
     const retStr=r.ret!==null?`${r.ret>=0?"+":""}${r.ret.toFixed(2)}%`:"—";
@@ -1002,7 +1037,7 @@ function renderISAPortfolio(){
   el.innerHTML=`
     <div class="card" style="margin-bottom:10px;overflow-x:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="clbl" style="margin-bottom:0">보유 ETF${totalRet!==null?` · <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}</div>
+        <div class="clbl" style="margin-bottom:0">보유 ETF${totalRet!==null?` · <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}${isaXirr!==null?` <span style="font-size:10px;color:var(--text3)">(연환산 ${isaXirr>=0?"+":""}${(isaXirr*100).toFixed(1)}%)</span>`:""}</div>
         <span id="isa-pf-refresh" onclick="fetchISAETFPrices(true)" style="font-size:11px;color:var(--accent);cursor:pointer">↻ ${isLive?timeStr:"가격 조회"}</span>
       </div>
       <table style="min-width:340px">
@@ -1124,6 +1159,7 @@ function renderPensionPortfolio(){
     return{k,qty,avgPrice,cur,cost,value,pnl,ret};
   });
   const totalPnl=totalValue-totalCost,totalRet=totalCost>0&&totalValue>0?(totalPnl/totalCost*100):null;
+  const pensionXirr=calcXIRR(appData.pensionTransactions,totalValue);
   const trows=rows.filter(r=>r.qty>0).map(r=>{
     const col=ISA_ETF[r.k].color,nm=ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","");
     const retStr=r.ret!==null?`${r.ret>=0?"+":""}${r.ret.toFixed(2)}%`:"—";
@@ -1139,7 +1175,7 @@ function renderPensionPortfolio(){
   }).join("");
   el.innerHTML=`<div class="card" style="margin-bottom:10px;overflow-x:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div class="clbl" style="margin-bottom:0">보유 ETF${totalRet!==null?` · <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}</div>
+      <div class="clbl" style="margin-bottom:0">보유 ETF${totalRet!==null?` · <strong style="color:${totalRet>=0?"var(--green)":"var(--red)"}">${totalRet>=0?"+":""}${totalRet.toFixed(2)}%</strong>`:""}${pensionXirr!==null?` <span style="font-size:10px;color:var(--text3)">(연환산 ${pensionXirr>=0?"+":""}${(pensionXirr*100).toFixed(1)}%)</span>`:""}</div>
       <span style="font-size:11px;color:var(--text3)">회사 지원 포함</span>
     </div>
     <table style="min-width:340px">
