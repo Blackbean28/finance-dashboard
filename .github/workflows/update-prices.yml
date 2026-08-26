@@ -21,7 +21,7 @@ jobs:
       - name: Fetch ETF prices
         run: |
           python3 - << 'PYEOF'
-          import json, urllib.request, datetime
+          import json, math, urllib.request, datetime
 
           HEADERS = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -43,6 +43,17 @@ jobs:
                   return None
               return int(sum(closes[-n:]) / n)
 
+          def volatility(closes, n=60):
+              if len(closes) < n + 1:
+                  return None
+              window = closes[-(n + 1):]
+              rets = [math.log(window[i] / window[i - 1]) for i in range(1, len(window)) if window[i - 1] > 0]
+              if not rets:
+                  return None
+              mean = sum(rets) / len(rets)
+              var = sum((r - mean) ** 2 for r in rets) / len(rets)
+              return round((var ** 0.5) * (252 ** 0.5), 4)
+
           # 나스닥100 레버리지는 나스닥100 × 2 근사값으로 계산
           # (합성 레버리지 ETF라 Yahoo Finance 미등록)
           ETF_TICKERS = {
@@ -56,6 +67,7 @@ jobs:
           prices = {}
           ma50 = {}
           ma200 = {}
+          vol = {}
           for key, ticker in ETF_TICKERS.items():
               try:
                   price, closes = fetch_yahoo(ticker)
@@ -65,6 +77,8 @@ jobs:
                   m50, m200 = sma(closes, 50), sma(closes, 200)
                   if m50: ma50[key] = m50
                   if m200: ma200[key] = m200
+                  v = volatility(closes)
+                  if v: vol[key] = v
               except Exception as e:
                   print(f"✗ {key} ({ticker}) 실패: {e}")
 
@@ -85,6 +99,7 @@ jobs:
             "prices": prices,
             "ma50": ma50,
             "ma200": ma200,
+            "vol": vol,
             "updated": now.strftime("%Y-%m-%d %H:%M KST"),
             "date": now.strftime("%Y-%m-%d")
           }

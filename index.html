@@ -404,6 +404,11 @@ function maBadge(k){
   const word=diff<=0?"저가 구간":"고가 구간";
   return` · <span style="color:${col}">MA50 ${diff>=0?"+":""}${diff.toFixed(1)}% (${word})</span>`;
 }
+function volBadge(k){
+  const v=isaVol[k];
+  if(!v)return"";
+  return` · <span style="color:var(--text3)">변동성(연) ${(v*100).toFixed(0)}%</span>`;
+}
 const TX_NAME_RULES=[
   [/레버리지/, "레버리지"],
   [/필라델피아반도체/, "반도체"],
@@ -460,7 +465,7 @@ const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{}};
 let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, isaPriceVals={}, activeTab="dash";
 let isaLivePrices={}, isaLastFetch=null;
-let isaMA50={}, isaMA200={};
+let isaMA50={}, isaMA200={}, isaVol={};
 let pieInst=null, expPieInst=null, areaInst=null, isaPfInst=null, pensionPfInst=null;
 
 const ASSET_META=[
@@ -861,29 +866,45 @@ function calcISAHoldings(){
   return h;
 }
 
+function isaMonthsElapsed(){
+  const txs=appData.transactions||[];
+  if(txs.length===0)return 1;
+  const dates=txs.map(t=>t.date.slice(0,7)).sort();
+  const[fy,fm]=dates[0].split("-").map(Number);
+  const[cy,cm]=curMonth.split("-").map(Number);
+  return Math.max(1,(cy-fy)*12+(cm-fm)+1);
+}
 function renderAllocSuggestion(){
   const el=document.getElementById("isa-alloc-suggestion");if(!el)return;
   const keys=["나스닥","SP500","반도체"];
-  const monthly=calcMonthlyISA(curMonth);
+  const holdings=calcISAHoldings();
+  const months=isaMonthsElapsed();
   const rows=keys.map(k=>{
     const target=appData.targets[k]||0;
-    const bought=monthly[k]?.cost||0;
-    return{k,target,bought,remaining:Math.max(0,target-bought)};
+    const cumTarget=target*months;
+    const qty=holdings[k]?.totalQty||0;
+    const cur=isaLivePrices[k]||0;
+    const priced=cur>0&&qty>0;
+    const curValue=priced?qty*cur:(holdings[k]?.totalCost||0);
+    return{k,cumTarget,curValue,priced,need:Math.max(0,cumTarget-curValue)};
   });
-  const totalRemaining=rows.reduce((s,r)=>s+r.remaining,0);
-  if(totalRemaining<=0){
-    el.innerHTML=`<div class="card" style="margin-bottom:10px;padding:14px 16px;color:var(--text3);font-size:12px;text-align:center">${dispM(curMonth)} 목표 배분을 이미 다 채우셨습니다 ✓</div>`;
+  const totalNeed=rows.reduce((s,r)=>s+r.need,0);
+  if(totalNeed<=0){
+    el.innerHTML=`<div class="card" style="margin-bottom:10px;padding:14px 16px;color:var(--text3);font-size:12px;text-align:center">누적 목표 평가액을 이미 채우셨습니다 ✓ (Value Averaging 기준)</div>`;
     return;
   }
-  const sorted=rows.filter(r=>r.remaining>0).sort((a,b)=>b.remaining-a.remaining);
+  const sorted=rows.filter(r=>r.need>0).sort((a,b)=>b.need-a.need);
   el.innerHTML=`<div class="card" style="margin-bottom:10px">
-    <div class="slval" style="margin-bottom:8px">${dispM(curMonth)} 매수 배분 제안 <span style="font-size:10px;color:var(--text3);font-weight:400">(목표 대비 남은 금액 기준)</span></div>
+    <div class="slval" style="margin-bottom:8px">${dispM(curMonth)} 매수 배분 제안 <span style="font-size:10px;color:var(--text3);font-weight:400">(Value Averaging · 누적 ${months}개월 목표 평가액 기준)</span></div>
     ${sorted.map(r=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border)">
-        <span style="font-size:13px;display:flex;align-items:center;gap:6px"><span class="dot" style="background:${ISA_ETF[r.k].color}"></span>${ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","")}${maBadge(r.k)}</span>
-        <span style="font-size:13px;font-weight:500">${fw(r.remaining)} 추천</span>
+      <div style="padding:6px 0;border-bottom:0.5px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;display:flex;align-items:center;gap:6px"><span class="dot" style="background:${ISA_ETF[r.k].color}"></span>${ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","")}</span>
+          <span style="font-size:13px;font-weight:500">${fw(r.need)} 추천</span>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${[r.priced?"":"가격 미조회 · 원가 기준",maBadge(r.k).replace(/^ · /,""),volBadge(r.k).replace(/^ · /,"")].filter(Boolean).join(" · ")}</div>
       </div>`).join("")}
-    <div style="font-size:11px;color:var(--text3);padding-top:6px">목표까지 남은 총액 ${fw(totalRemaining)} · MA50은 참고용이며 매수 신호가 아닙니다</div>
+    <div style="font-size:11px;color:var(--text3);padding-top:6px">누적 목표 대비 부족액 합계 ${fw(totalNeed)}<br>· 하락장 직후엔 이 금액이 평소보다 크게 나올 수 있습니다 (VA 방식의 정상 동작)<br>· MA/변동성은 참고용이며 매수 신호가 아닙니다</div>
   </div>`;
 }
 function calcMonthlyISA(month){
@@ -1007,6 +1028,7 @@ async function fetchISAETFPrices(showToastMsg=false){
         if(p&&p>0){isaLivePrices[k]=p;anySuccess=true;}
         if(data.ma50?.[k]>0)isaMA50[k]=data.ma50[k];
         if(data.ma200?.[k]>0)isaMA200[k]=data.ma200[k];
+        if(data.vol?.[k]>0)isaVol[k]=data.vol[k];
       });
     }
     isaLastFetch=new Date();
