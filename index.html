@@ -253,6 +253,7 @@
           <option value="SP500">미국S&P500</option>
           <option value="반도체">미국필라델피아반도체</option>
           <option value="레버리지">나스닥100레버리지</option>
+          <option value="삼성전자">삼성전자</option>
         </select>
         <input type="date" id="tx-date" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
       </div>
@@ -279,6 +280,7 @@
           <option value="SP500">미국S&P500</option>
           <option value="반도체">미국필라델피아반도체</option>
           <option value="레버리지">나스닥100레버리지</option>
+          <option value="배당다우존스">미국배당다우존스</option>
         </select>
         <input type="date" id="ptx-date" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
       </div>
@@ -377,6 +379,8 @@ const ISA_ETF={
   SP500:    {label:"TIGER 미국S&P500",                color:"#3b6d11", ncode:"360750"},
   반도체:   {label:"TIGER 미국필라델피아반도체나스닥", color:"#eda100", ncode:"381180"},
   레버리지: {label:"TIGER 나스닥100레버리지(합성)",   color:"#e34948", ncode:"406970"},
+  삼성전자: {label:"삼성전자",                         color:"#1560bd", ncode:"005930"},
+  배당다우존스: {label:"TIGER 미국배당다우존스",       color:"#8a63d2", ncode:"458730"},
 };
 const ISA_ETF_KEYS=Object.keys(ISA_ETF);
 const DEF_ISA={나스닥:{avgPrice:0,qty:0},SP500:{avgPrice:0,qty:0},반도체:{avgPrice:0,qty:0},레버리지:{avgPrice:0,qty:0}};
