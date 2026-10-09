@@ -927,10 +927,10 @@ function renderTxPreview(){
 }
 
 function renderTxList(){
-  const txs=[...(appData.transactions||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const txs=[...(appData.transactions||[])].filter(t=>t.date.startsWith(curMonth)).sort((a,b)=>b.date.localeCompare(a.date));
   const el=document.getElementById("tx-list");if(!el)return;
-  if(txs.length===0){el.innerHTML=`<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">아직 거래 내역이 없습니다</div>`;return;}
-  el.innerHTML=`<div class="slbl">거래 내역 (${txs.length}건)</div>`+txs.map(t=>{
+  if(txs.length===0){el.innerHTML=`<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">${dispM(curMonth)}에는 거래 내역이 없습니다</div>`;return;}
+  el.innerHTML=`<div class="slbl">${dispM(curMonth)} 거래 내역 (${txs.length}건)</div>`+txs.map(t=>{
     const col=ISA_ETF[t.etf]?.color||"#898781";
     const nm=(ISA_ETF[t.etf]?.label||t.etf).replace("TIGER ","").replace("(합성)","");
     const amt=(t.price*t.qty).toLocaleString();
@@ -1274,10 +1274,10 @@ function renderPensionPortfolio(){
 }
 
 function renderPensionTxList(){
-  const txs=[...(appData.pensionTransactions||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const txs=[...(appData.pensionTransactions||[])].filter(t=>t.date.startsWith(curMonth)).sort((a,b)=>b.date.localeCompare(a.date));
   const el=document.getElementById("ptx-list");if(!el)return;
-  if(txs.length===0){el.innerHTML=`<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">아직 거래 내역이 없습니다</div>`;return;}
-  el.innerHTML=`<div class="slbl">연금저축 거래 내역 (${txs.length}건)</div>`+txs.map(t=>{
+  if(txs.length===0){el.innerHTML=`<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">${dispM(curMonth)}에는 거래 내역이 없습니다</div>`;return;}
+  el.innerHTML=`<div class="slbl">${dispM(curMonth)} 연금저축 거래 내역 (${txs.length}건)</div>`+txs.map(t=>{
     const col=ISA_ETF[t.etf]?.color||"#898781",nm=(ISA_ETF[t.etf]?.label||t.etf).replace("TIGER ","").replace("(합성)","");
     return`<div class="card" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;padding:10px 12px">
       <div><div style="font-size:12px;color:var(--text3)">${t.date}</div><div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px"><span class="dot" style="background:${col}"></span>${nm}</div></div>
