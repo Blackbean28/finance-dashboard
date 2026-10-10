@@ -266,6 +266,12 @@
         </select>
         <input type="date" id="tx-date" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
       </div>
+      <div style="margin-bottom:8px">
+        <select id="tx-kind" style="width:100%;background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
+          <option value="buy" selected>매수</option>
+          <option value="sell">매도</option>
+        </select>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:4px">
           <input type="number" id="tx-price" placeholder="주문단가" min="0" step="1" style="flex:1;background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
@@ -282,6 +288,7 @@
       <button class="bghost" style="margin-top:8px" onclick="document.getElementById('tx-file').click()">거래내역 파일로 가져오기</button>
     </div>
     <div id="tx-list"></div>
+    <div id="isa-div-list"></div>
     <div class="divider"></div>
     <div class="slbl">연금저축 매수 거래 입력</div>
     <div class="card" style="margin-bottom:10px">
@@ -294,6 +301,12 @@
           <option value="배당다우존스">미국배당다우존스</option>
         </select>
         <input type="date" id="ptx-date" style="background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
+      </div>
+      <div style="margin-bottom:8px">
+        <select id="ptx-kind" style="width:100%;background:var(--surface2);border:0.5px solid var(--border-s);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;outline:none">
+          <option value="buy" selected>매수</option>
+          <option value="sell">매도</option>
+        </select>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:4px">
@@ -311,6 +324,7 @@
       <button class="bghost" style="margin-top:8px" onclick="document.getElementById('ptx-file').click()">거래내역 파일로 가져오기</button>
     </div>
     <div id="ptx-list"></div>
+    <div id="pension-div-list"></div>
     <div class="divider"></div>
     <div class="slbl">이번 달 자산 현황</div>
     <div class="info-box">각 계좌의 실제 잔액·평가액을 입력하면 총 순자산과 수익률을 계산합니다</div>
@@ -374,6 +388,7 @@
     <div class="divider"></div>
     <div class="slbl">데이터 관리</div>
     <button class="bghost" onclick="forceSync()">Gist에서 다시 불러오기</button>
+    <button class="bghost" onclick="exportData()">전체 데이터 내보내기 (JSON 백업)</button>
     <button class="bdanger" onclick="resetAll()">전체 초기화</button>
     <div class="divider"></div>
     <div class="slbl">GitHub 연동</div>
@@ -424,19 +439,26 @@ function matchETFKey(name,allowedKeys){
 function parseMiraeTxFile(text,allowedKeys){
   const doc=new DOMParser().parseFromString(text,"text/html");
   const rows=[...doc.querySelectorAll("table tbody tr")];
-  const result=[];
+  const buys=[],sells=[],dividends=[];
   for(const row of rows){
     const cells=[...row.querySelectorAll("td")].map(td=>td.textContent.trim());
     if(cells.length<5)continue;
     const[dateStr,type,name,qtyStr,amtStr]=cells;
-    if(type!=="주식매수입고")continue;
-    const key=matchETFKey(name,allowedKeys);if(!key)continue;
+    const date=dateStr.replace(/\./g,"-");
     const qty=parseInt(qtyStr.replace(/,/g,""))||0;
     const amt=parseInt(amtStr.replace(/,/g,""))||0;
-    if(qty<=0||amt<=0)continue;
-    result.push({etf:key,date:dateStr.replace(/\./g,"-"),price:Math.round(amt/qty),qty});
+    if(type==="주식매수입고"){
+      const key=matchETFKey(name,allowedKeys);if(!key||qty<=0||amt<=0)continue;
+      buys.push({etf:key,date,price:Math.round(amt/qty),qty,type:"buy"});
+    }else if(type==="주식매도출고"){
+      const key=matchETFKey(name,allowedKeys);if(!key||qty<=0||amt<=0)continue;
+      sells.push({etf:key,date,price:Math.round(amt/qty),qty,type:"sell"});
+    }else if(type==="ETF/상장클래스 분배금입금"){
+      const key=matchETFKey(name,allowedKeys);if(!key||amt<=0)continue;
+      dividends.push({etf:key,date,amount:amt});
+    }
   }
-  return result;
+  return{buys,sells,dividends};
 }
 const DEF_ISA={나스닥:{avgPrice:0,qty:0},SP500:{avgPrice:0,qty:0},반도체:{avgPrice:0,qty:0},레버리지:{avgPrice:0,qty:0}};
 
@@ -462,7 +484,7 @@ const EMETA={
 };
 const ICATS=Object.keys(IMETA), ECATS=Object.keys(EMETA);
 
-let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{}};
+let appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],dividends:[],pensionDividends:[],months:{}};
 let curMonth=getCurMonth(), inputVals={}, expVals={}, assetVals={}, isaPriceVals={}, activeTab="dash";
 let isaLivePrices={}, isaLastFetch=null;
 let isaMA50={}, isaMA200={}, isaVol={};
@@ -506,7 +528,7 @@ async function loadFromGist(){
   if(!res.ok)return false;
   const d=await res.json();
   const c=d.files?.[GIST_FILE]?.content;
-  if(c){appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{},...JSON.parse(c)};return true;}
+  if(c){appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],dividends:[],pensionDividends:[],months:{},...JSON.parse(c)};return true;}
   return false;
 }
 async function saveToGist(){
@@ -810,9 +832,20 @@ function renderNetWorth(){
     </div>`;
 }
 
+function exportData(){
+  const blob=new Blob([JSON.stringify(appData,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  const today=new Date();
+  const stamp=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  a.href=url;a.download=`finance-backup-${stamp}.json`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("백업 파일을 내보냈습니다 ✓");
+}
 async function resetAll(){
   if(!confirm("전체 데이터를 초기화하시겠습니까?"))return;
-  appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],months:{}};
+  appData={targets:{...DEF_TARGETS},expTargets:{...DEF_EXP},settings:{...DEF_SETTINGS},isaHoldings:{...DEF_ISA},transactions:[],pensionTransactions:[],dividends:[],pensionDividends:[],months:{}};
   setSB("syncing","초기화 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"오류");
@@ -854,16 +887,29 @@ function calcXIRR(txs,totalValue){
 }
 
 // ── ISA 거래 내역 ──
-function calcISAHoldings(){
-  const txs=appData.transactions||[];
+// 평단가(이동평균) 방식으로 매수/매도를 순서대로 처리. 매도 시 그 시점 평단가로 원가를 차감하고 차익은 realizedPnl로 기록.
+function computeHoldings(txs){
   const h={};
   ISA_ETF_KEYS.forEach(k=>{
-    const etfTxs=txs.filter(t=>t.etf===k);
-    const totalQty=etfTxs.reduce((s,t)=>s+t.qty,0);
-    const totalCost=etfTxs.reduce((s,t)=>s+t.price*t.qty,0);
-    h[k]={totalQty,totalCost,avgPrice:totalQty>0?Math.round(totalCost/totalQty):0};
+    const etfTxs=txs.filter(t=>t.etf===k).sort((a,b)=>a.date.localeCompare(b.date));
+    let qty=0,cost=0,realizedPnl=0;
+    etfTxs.forEach(t=>{
+      if(t.type==="sell"){
+        const sellQty=Math.min(t.qty,qty);
+        const avgAtSale=qty>0?cost/qty:0;
+        const costRemoved=avgAtSale*sellQty;
+        realizedPnl+=t.price*sellQty-costRemoved;
+        qty-=sellQty;cost=Math.max(0,cost-costRemoved);
+      }else{
+        qty+=t.qty;cost+=t.qty*t.price;
+      }
+    });
+    h[k]={totalQty:qty,totalCost:Math.round(cost),avgPrice:qty>0?Math.round(cost/qty):0,realizedPnl:Math.round(realizedPnl)};
   });
   return h;
+}
+function calcISAHoldings(){
+  return computeHoldings(appData.transactions||[]);
 }
 
 function isaMonthsElapsed(){
@@ -908,7 +954,7 @@ function renderAllocSuggestion(){
   </div>`;
 }
 function calcMonthlyISA(month){
-  const txs=(appData.transactions||[]).filter(t=>t.date.startsWith(month));
+  const txs=(appData.transactions||[]).filter(t=>t.date.startsWith(month)&&t.type!=="sell");
   const r={};
   ISA_ETF_KEYS.forEach(k=>{
     const et=txs.filter(t=>t.etf===k);
@@ -931,19 +977,20 @@ function renderTxList(){
   const el=document.getElementById("tx-list");if(!el)return;
   if(txs.length===0){el.innerHTML=`<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">${dispM(curMonth)}에는 거래 내역이 없습니다</div>`;return;}
   el.innerHTML=`<div class="slbl">${dispM(curMonth)} 거래 내역 (${txs.length}건)</div>`+txs.map(t=>{
+    const isSell=t.type==="sell";
     const col=ISA_ETF[t.etf]?.color||"#898781";
     const nm=(ISA_ETF[t.etf]?.label||t.etf).replace("TIGER ","").replace("(합성)","");
     const amt=(t.price*t.qty).toLocaleString();
     return`<div class="card" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;padding:10px 12px">
       <div>
-        <div style="font-size:12px;color:var(--text3)">${t.date}</div>
+        <div style="font-size:12px;color:var(--text3)">${t.date}${isSell?` · <span style="color:var(--red)">매도</span>`:""}</div>
         <div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px">
           <span class="dot" style="background:${col}"></span>${nm}
         </div>
       </div>
       <div style="text-align:right;flex:1;margin:0 10px">
         <div style="font-size:13px">${t.price.toLocaleString()}원 × ${t.qty}주</div>
-        <div style="font-size:12px;color:var(--text3)">${parseInt(amt.replace(/,/g,"")).toLocaleString()}원</div>
+        <div style="font-size:12px;color:${isSell?"var(--red)":"var(--text3)"}">${isSell?"-":""}${amt}원</div>
       </div>
       <button onclick="deleteTransaction('${t.id}')" style="background:none;border:0.5px solid var(--border-s);color:var(--text3);padding:5px 8px;border-radius:var(--radius);cursor:pointer;font-size:11px">삭제</button>
     </div>`;
@@ -956,32 +1003,43 @@ function handleTxFile(event){
 }
 function txPreviewLine(p){
   const nm=(ISA_ETF[p.etf]?.label||p.etf).replace("TIGER ","").replace("(합성)","");
-  return`${p.date}  ${nm}  ${p.qty}주 · ${p.price.toLocaleString()}원`;
+  const tag=p.type==="sell"?"[매도] ":"";
+  return`${tag}${p.date}  ${nm}  ${p.qty}주 · ${p.price.toLocaleString()}원`;
+}
+function divPreviewLine(d){
+  const nm=(ISA_ETF[d.etf]?.label||d.etf).replace("TIGER ","").replace("(합성)","");
+  return`[배당] ${d.date}  ${nm}  ${d.amount.toLocaleString()}원`;
 }
 async function importTxFile(file){
   const text=await file.text();
-  const parsed=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","삼성전자"]);
-  if(parsed.length===0){showToast("인식된 매수 내역이 없습니다");return;}
+  const{buys,sells,dividends}=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","삼성전자"]);
+  const txParsed=[...buys,...sells];
+  if(txParsed.length===0&&dividends.length===0){showToast("인식된 내역이 없습니다");return;}
   if(!appData.transactions)appData.transactions=[];
-  const existing=new Set(appData.transactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}`));
-  const toAdd=parsed.filter(p=>!existing.has(`${p.date}|${p.etf}|${p.qty}|${p.price}`));
-  if(toAdd.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
-  const preview=toAdd.map(txPreviewLine).join("\n");
-  if(!confirm(`[ISA] 아래 ${toAdd.length}건을 추가합니다.\n\n${preview}`))return;
-  toAdd.forEach(p=>appData.transactions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
+  if(!appData.dividends)appData.dividends=[];
+  const existingTx=new Set(appData.transactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}|${t.type||"buy"}`));
+  const toAddTx=txParsed.filter(p=>!existingTx.has(`${p.date}|${p.etf}|${p.qty}|${p.price}|${p.type}`));
+  const existingDiv=new Set(appData.dividends.map(d=>`${d.date}|${d.etf}|${d.amount}`));
+  const toAddDiv=dividends.filter(d=>!existingDiv.has(`${d.date}|${d.etf}|${d.amount}`));
+  if(toAddTx.length===0&&toAddDiv.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  const preview=[...toAddTx.map(txPreviewLine),...toAddDiv.map(divPreviewLine)].join("\n");
+  if(!confirm(`[ISA] 아래 ${toAddTx.length+toAddDiv.length}건을 추가합니다.\n\n${preview}`))return;
+  toAddTx.forEach(p=>appData.transactions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
+  toAddDiv.forEach(d=>appData.dividends.push({id:`d${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...d}));
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  if(ok){showToast(`${toAdd.length}건 추가됐습니다 ✓`);renderTxList();renderISAPortfolio();}
+  if(ok){showToast(`${toAddTx.length+toAddDiv.length}건 추가됐습니다 ✓`);renderTxList();renderISAPortfolio();renderIsaDivList();}
 }
 async function addTransaction(){
   const etf=document.getElementById("tx-etf")?.value;
   const date=document.getElementById("tx-date")?.value;
+  const type=document.getElementById("tx-kind")?.value||"buy";
   const price=parseInt(document.getElementById("tx-price")?.value)||0;
   const qty=parseInt(document.getElementById("tx-qty")?.value)||0;
   if(!etf||!date||price<=0||qty<=0){showToast("날짜·단가·수량을 모두 입력하세요");return;}
   if(!appData.transactions)appData.transactions=[];
-  appData.transactions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,etf,date,price,qty});
+  appData.transactions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,etf,date,price,qty,type});
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
@@ -1094,6 +1152,8 @@ function renderISAPortfolio(){
   // 이번달 매수 현황
   const monthlyISA=calcMonthlyISA(curMonth);
   const monthlyTotal=ISA_ETF_KEYS.reduce((s,k)=>s+(monthlyISA[k]?.cost||0),0);
+  const realizedPnlTotal=ISA_ETF_KEYS.reduce((s,k)=>s+(h[k]?.realizedPnl||0),0);
+  const divTotal=(appData.dividends||[]).reduce((s,d)=>s+d.amount,0);
   el.innerHTML=`
     <div class="card" style="margin-bottom:10px;overflow-x:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1111,6 +1171,10 @@ function renderISAPortfolio(){
           <td class="tr hl" style="font-size:11px;padding-top:6px;color:${totalRet!==null?(totalRet>=0?"var(--green)":"var(--red)"):"var(--text3)"}">${totalRet!==null?(totalRet>=0?"+":"")+totalRet.toFixed(2)+"%":"—"}</td>
         </tr></tfoot>
       </table>
+      ${realizedPnlTotal!==0||divTotal>0?`<div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);font-size:11px;color:var(--text3)">
+        ${realizedPnlTotal!==0?`<span>매도 실현손익 <strong style="color:${realizedPnlTotal>=0?"var(--green)":"var(--red)"}">${realizedPnlTotal>=0?"+":""}${fwS(realizedPnlTotal)}</strong></span>`:"<span></span>"}
+        ${divTotal>0?`<span>누적 배당금 <strong style="color:var(--green)">+${fwS(divTotal)}</strong></span>`:""}
+      </div>`:""}
     </div>
     ${monthlyTotal>0?`<div class="card" style="margin-bottom:10px">
       <div class="clbl">${dispM(curMonth)} 매수 현황</div>
@@ -1136,67 +1200,9 @@ function renderISAPortfolio(){
   }
 }
 
-function renderISAPriceInputs(){
-  const prices=(appData.months[curMonth]||{}).isaPrices||{};
-  isaPriceVals={...prices};
-  document.getElementById("isa-price-inputs").innerHTML=ISA_ETF_KEYS.map(k=>{
-    const p=prices[k]||0;
-    return`<div class="card"><div class="chdr" style="margin-bottom:8px"><div class="cname"><span class="dot" style="background:${ISA_ETF[k].color}"></span>${ISA_ETF[k].label.replace("TIGER ","").replace("(합성)","")}</div><div class="cright"><div class="cval" id="ip-${k}" style="color:${ISA_ETF[k].color}">${p>0?p.toLocaleString()+"원":"미입력"}</div></div></div><div class="irow"><input type="number" id="ipp-${k}" placeholder="현재가(원)" value="${p>0?p:''}" min="0" step="1" oninput="syncISAPrice('${k}')"><span class="unit">원</span></div></div>`;
-  }).join("");
-  const btn=document.getElementById("isa-price-save-btn");if(btn)btn.textContent=`${dispM(curMonth)} ISA 현재가 저장`;
-}
-
-function syncISAPrice(k){
-  const v=parseInt(document.getElementById(`ipp-${k}`)?.value)||0;
-  isaPriceVals[k]=v;
-  const el=document.getElementById(`ip-${k}`);
-  if(el)el.textContent=v>0?v.toLocaleString()+"원":"미입력";
-}
-
-async function saveISAPrices(){
-  appData.months[curMonth]={...appData.months[curMonth],isaPrices:{...isaPriceVals}};
-  setSB("syncing","저장 중...");
-  const btn=document.getElementById("isa-price-save-btn");btn.textContent="저장 중...";btn.disabled=true;
-  const ok=await saveToGist();
-  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  btn.textContent=`${dispM(curMonth)} ISA 현재가 저장`;btn.disabled=false;
-  showToast(ok?"ISA 현재가 저장됐습니다 ✓":"저장 실패");
-  if(ok)switchTab("dash");
-}
-
-function renderISAHoldingsSettings(){
-  const h=appData.isaHoldings||DEF_ISA;
-  document.getElementById("set-isa").innerHTML=ISA_ETF_KEYS.map(k=>{
-    const avg=h[k]?.avgPrice||0,qty=h[k]?.qty||0;
-    return`<div class="card"><div class="cname" style="margin-bottom:8px"><span class="dot" style="background:${ISA_ETF[k].color}"></span>${ISA_ETF[k].label.replace("TIGER ","").replace("(합성)","")}</div><div class="irow"><input type="number" id="sh-avg-${k}" placeholder="평단가(원)" value="${avg>0?avg:''}" min="0" step="1"><span class="unit">원</span><input type="number" id="sh-qty-${k}" placeholder="수량" value="${qty>0?qty:''}" min="0" step="1" style="flex:0.6"><span class="unit">주</span></div></div>`;
-  }).join("");
-}
-
-async function saveISAHoldings(){
-  if(!appData.isaHoldings)appData.isaHoldings={...DEF_ISA};
-  ISA_ETF_KEYS.forEach(k=>{
-    const avg=parseInt(document.getElementById(`sh-avg-${k}`)?.value)||0;
-    const qty=parseInt(document.getElementById(`sh-qty-${k}`)?.value)||0;
-    appData.isaHoldings[k]={avgPrice:avg,qty};
-  });
-  setSB("syncing","저장 중...");
-  const ok=await saveToGist();
-  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  showToast(ok?"ISA 보유현황 저장됐습니다 ✓":"저장 실패");
-  if(ok)renderAll();
-}
-
 // ── 연금저축 거래 ──
 function calcPensionHoldings(){
-  const txs=appData.pensionTransactions||[];
-  const h={};
-  ISA_ETF_KEYS.forEach(k=>{
-    const et=txs.filter(t=>t.etf===k);
-    const totalQty=et.reduce((s,t)=>s+t.qty,0);
-    const totalCost=et.reduce((s,t)=>s+t.price*t.qty,0);
-    h[k]={totalQty,totalCost,avgPrice:totalQty>0?Math.round(totalCost/totalQty):0};
-  });
-  return h;
+  return computeHoldings(appData.pensionTransactions||[]);
 }
 
 function renderPensionPortfolio(){
@@ -1220,6 +1226,8 @@ function renderPensionPortfolio(){
   });
   const totalPnl=totalValue-totalCost,totalRet=totalCost>0&&totalValue>0?(totalPnl/totalCost*100):null;
   const pensionXirr=calcXIRR(appData.pensionTransactions,totalValue);
+  const realizedPnlTotal=ISA_ETF_KEYS.reduce((s,k)=>s+(h[k]?.realizedPnl||0),0);
+  const divTotal=(appData.pensionDividends||[]).reduce((s,d)=>s+d.amount,0);
   const trows=rows.filter(r=>r.qty>0).map(r=>{
     const col=ISA_ETF[r.k].color,nm=ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","");
     const retStr=r.ret!==null?`${r.ret>=0?"+":""}${r.ret.toFixed(2)}%`:"—";
@@ -1249,6 +1257,10 @@ function renderPensionPortfolio(){
         <td class="tr hl" style="font-size:11px;padding-top:6px;color:${totalRet!==null?(totalRet>=0?"var(--green)":"var(--red)"):"var(--text3)"}">${totalRet!==null?(totalRet>=0?"+":"")+totalRet.toFixed(2)+"%":"—"}</td>
       </tr></tfoot>
     </table>
+    ${realizedPnlTotal!==0||divTotal>0?`<div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);font-size:11px;color:var(--text3)">
+      ${realizedPnlTotal!==0?`<span>매도 실현손익 <strong style="color:${realizedPnlTotal>=0?"var(--green)":"var(--red)"}">${realizedPnlTotal>=0?"+":""}${fwS(realizedPnlTotal)}</strong></span>`:"<span></span>"}
+      ${divTotal>0?`<span>누적 배당금 <strong style="color:var(--green)">+${fwS(divTotal)}</strong></span>`:""}
+    </div>`:""}
   </div>`;
 
   // 연금저축 비중 도넛 차트
@@ -1278,10 +1290,11 @@ function renderPensionTxList(){
   const el=document.getElementById("ptx-list");if(!el)return;
   if(txs.length===0){el.innerHTML=`<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">${dispM(curMonth)}에는 거래 내역이 없습니다</div>`;return;}
   el.innerHTML=`<div class="slbl">${dispM(curMonth)} 연금저축 거래 내역 (${txs.length}건)</div>`+txs.map(t=>{
+    const isSell=t.type==="sell";
     const col=ISA_ETF[t.etf]?.color||"#898781",nm=(ISA_ETF[t.etf]?.label||t.etf).replace("TIGER ","").replace("(합성)","");
     return`<div class="card" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;padding:10px 12px">
-      <div><div style="font-size:12px;color:var(--text3)">${t.date}</div><div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px"><span class="dot" style="background:${col}"></span>${nm}</div></div>
-      <div style="text-align:right;flex:1;margin:0 10px"><div style="font-size:13px">${t.price.toLocaleString()}원 × ${t.qty}주</div><div style="font-size:12px;color:var(--text3)">${(t.price*t.qty).toLocaleString()}원</div></div>
+      <div><div style="font-size:12px;color:var(--text3)">${t.date}${isSell?` · <span style="color:var(--red)">매도</span>`:""}</div><div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px"><span class="dot" style="background:${col}"></span>${nm}</div></div>
+      <div style="text-align:right;flex:1;margin:0 10px"><div style="font-size:13px">${t.price.toLocaleString()}원 × ${t.qty}주</div><div style="font-size:12px;color:${isSell?"var(--red)":"var(--text3)"}">${isSell?"-":""}${(t.price*t.qty).toLocaleString()}원</div></div>
       <button onclick="deletePensionTransaction('${t.id}')" style="background:none;border:0.5px solid var(--border-s);color:var(--text3);padding:5px 8px;border-radius:var(--radius);cursor:pointer;font-size:11px">삭제</button>
     </div>`;
   }).join("");
@@ -1305,26 +1318,32 @@ function handlePtxFile(event){
 }
 async function importPtxFile(file){
   const text=await file.text();
-  const parsed=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","배당다우존스"]);
-  if(parsed.length===0){showToast("인식된 매수 내역이 없습니다");return;}
+  const{buys,sells,dividends}=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","배당다우존스"]);
+  const txParsed=[...buys,...sells];
+  if(txParsed.length===0&&dividends.length===0){showToast("인식된 내역이 없습니다");return;}
   if(!appData.pensionTransactions)appData.pensionTransactions=[];
-  const existing=new Set(appData.pensionTransactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}`));
-  const toAdd=parsed.filter(p=>!existing.has(`${p.date}|${p.etf}|${p.qty}|${p.price}`));
-  if(toAdd.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
-  const preview=toAdd.map(txPreviewLine).join("\n");
-  if(!confirm(`[연금저축] 아래 ${toAdd.length}건을 추가합니다.\n\n${preview}`))return;
-  toAdd.forEach(p=>appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
+  if(!appData.pensionDividends)appData.pensionDividends=[];
+  const existingTx=new Set(appData.pensionTransactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}|${t.type||"buy"}`));
+  const toAddTx=txParsed.filter(p=>!existingTx.has(`${p.date}|${p.etf}|${p.qty}|${p.price}|${p.type}`));
+  const existingDiv=new Set(appData.pensionDividends.map(d=>`${d.date}|${d.etf}|${d.amount}`));
+  const toAddDiv=dividends.filter(d=>!existingDiv.has(`${d.date}|${d.etf}|${d.amount}`));
+  if(toAddTx.length===0&&toAddDiv.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  const preview=[...toAddTx.map(txPreviewLine),...toAddDiv.map(divPreviewLine)].join("\n");
+  if(!confirm(`[연금저축] 아래 ${toAddTx.length+toAddDiv.length}건을 추가합니다.\n\n${preview}`))return;
+  toAddTx.forEach(p=>appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
+  toAddDiv.forEach(d=>appData.pensionDividends.push({id:`pd${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...d}));
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  if(ok){showToast(`${toAdd.length}건 추가됐습니다 ✓`);renderPensionTxList();renderPensionPortfolio();}
+  if(ok){showToast(`${toAddTx.length+toAddDiv.length}건 추가됐습니다 ✓`);renderPensionTxList();renderPensionPortfolio();renderPensionDivList();}
 }
 async function addPensionTransaction(){
   const etf=document.getElementById("ptx-etf")?.value,date=document.getElementById("ptx-date")?.value;
+  const type=document.getElementById("ptx-kind")?.value||"buy";
   const price=parseInt(document.getElementById("ptx-price")?.value)||0,qty=parseInt(document.getElementById("ptx-qty")?.value)||0;
   if(!etf||!date||price<=0||qty<=0){showToast("날짜·단가·수량을 모두 입력하세요");return;}
   if(!appData.pensionTransactions)appData.pensionTransactions=[];
-  appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,etf,date,price,qty});
+  appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,etf,date,price,qty,type});
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
@@ -1337,6 +1356,37 @@ async function deletePensionTransaction(id){
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
   if(ok){showToast("삭제됐습니다");renderPensionTxList();renderPensionPortfolio();}
+}
+
+// ── 배당금(분배금) 내역 ──
+function renderDivList(divs,elId,labelPrefix,deleteFn){
+  const el=document.getElementById(elId);if(!el)return;
+  const list=[...(divs||[])].filter(d=>d.date.startsWith(curMonth)).sort((a,b)=>b.date.localeCompare(a.date));
+  if(list.length===0){el.innerHTML="";return;}
+  el.innerHTML=`<div class="slbl">${dispM(curMonth)} ${labelPrefix} 배당금 (${list.length}건)</div>`+list.map(d=>{
+    const col=ISA_ETF[d.etf]?.color||"#898781",nm=(ISA_ETF[d.etf]?.label||d.etf).replace("TIGER ","").replace("(합성)","");
+    return`<div class="card" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;padding:10px 12px">
+      <div><div style="font-size:12px;color:var(--text3)">${d.date}</div><div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px"><span class="dot" style="background:${col}"></span>${nm} 배당금</div></div>
+      <div style="text-align:right;flex:1;margin:0 10px"><div style="font-size:13px;color:var(--green)">+${d.amount.toLocaleString()}원</div></div>
+      <button onclick="${deleteFn}('${d.id}')" style="background:none;border:0.5px solid var(--border-s);color:var(--text3);padding:5px 8px;border-radius:var(--radius);cursor:pointer;font-size:11px">삭제</button>
+    </div>`;
+  }).join("");
+}
+function renderIsaDivList(){renderDivList(appData.dividends,"isa-div-list","ISA","deleteIsaDividend");}
+function renderPensionDivList(){renderDivList(appData.pensionDividends,"pension-div-list","연금저축","deletePensionDividend");}
+async function deleteIsaDividend(id){
+  appData.dividends=(appData.dividends||[]).filter(d=>d.id!==id);
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  if(ok){showToast("삭제됐습니다");renderIsaDivList();renderISAPortfolio();}
+}
+async function deletePensionDividend(id){
+  appData.pensionDividends=(appData.pensionDividends||[]).filter(d=>d.id!==id);
+  setSB("syncing","저장 중...");
+  const ok=await saveToGist();
+  setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
+  if(ok){showToast("삭제됐습니다");renderPensionDivList();renderPensionPortfolio();}
 }
 
 // ── ISA 연간 납입한도 ──
@@ -1352,7 +1402,7 @@ function calcISAYearlyUsage(){
 // ── 렌더링 ──
 function renderAll(){
   if(activeTab==="dash")   {renderDash();renderISAPortfolio();renderPensionPortfolio();}
-  if(activeTab==="input")  {renderInput();renderTxList();renderPensionTxList();renderAllocSuggestion();initTxDate();initPtxDate();document.getElementById("tx-price")?.addEventListener("input",renderTxPreview);document.getElementById("tx-qty")?.addEventListener("input",renderTxPreview);document.getElementById("ptx-price")?.addEventListener("input",renderPtxPreview);document.getElementById("ptx-qty")?.addEventListener("input",renderPtxPreview);}
+  if(activeTab==="input")  {renderInput();renderTxList();renderPensionTxList();renderIsaDivList();renderPensionDivList();renderAllocSuggestion();initTxDate();initPtxDate();document.getElementById("tx-price")?.addEventListener("input",renderTxPreview);document.getElementById("tx-qty")?.addEventListener("input",renderTxPreview);document.getElementById("ptx-price")?.addEventListener("input",renderPtxPreview);document.getElementById("ptx-qty")?.addEventListener("input",renderPtxPreview);}
   if(activeTab==="expense")renderExpense();
   if(activeTab==="chart")  renderChart();
   if(activeTab==="set")    {renderSettings();}
@@ -1433,7 +1483,7 @@ function renderDash(){
   // 이번달 투자 총액 (ISA는 납입액 직접 입력 기준)
   const isaThisMonth=mData.isaDeposit||0;
   const totalNow=["적금","QLD","CMA"].reduce((s,c)=>s+(mData[c]||0),0)+isaThisMonth;
-  const totalTgt=ICATS.reduce((s,c)=>s+(targets[c]||0),0)+1500000; // ISA 목표 150만원 포함
+  const totalTgt=ICATS.reduce((s,c)=>s+(targets[c]||0),0); // ICATS에 나스닥+SP500+반도체(=ISA 목표 150만원) 포함
   const pNow=pb(totalNow,totalTgt);
 
   // 올바른 누적 총계
