@@ -436,29 +436,33 @@ function matchETFKey(name,allowedKeys){
   for(const[re,key]of TX_NAME_RULES){if(re.test(name)&&allowedKeys.includes(key))return key;}
   return null;
 }
+const TX_RELEVANT_TYPES=new Set(["주식매수입고","주식매도출고","ETF/상장클래스 분배금입금"]);
 function parseMiraeTxFile(text,allowedKeys){
   const doc=new DOMParser().parseFromString(text,"text/html");
   const rows=[...doc.querySelectorAll("table tbody tr")];
-  const buys=[],sells=[],dividends=[];
+  const buys=[],sells=[],dividends=[],unmatched=[];
   for(const row of rows){
     const cells=[...row.querySelectorAll("td")].map(td=>td.textContent.trim());
     if(cells.length<5)continue;
     const[dateStr,type,name,qtyStr,amtStr]=cells;
+    if(!TX_RELEVANT_TYPES.has(type))continue;
     const date=dateStr.replace(/\./g,"-");
     const qty=parseInt(qtyStr.replace(/,/g,""))||0;
     const amt=parseInt(amtStr.replace(/,/g,""))||0;
+    const key=matchETFKey(name,allowedKeys);
+    if(!key){if(name)unmatched.push(name);continue;}
     if(type==="주식매수입고"){
-      const key=matchETFKey(name,allowedKeys);if(!key||qty<=0||amt<=0)continue;
+      if(qty<=0||amt<=0)continue;
       buys.push({etf:key,date,price:Math.round(amt/qty),qty,type:"buy"});
     }else if(type==="주식매도출고"){
-      const key=matchETFKey(name,allowedKeys);if(!key||qty<=0||amt<=0)continue;
+      if(qty<=0||amt<=0)continue;
       sells.push({etf:key,date,price:Math.round(amt/qty),qty,type:"sell"});
-    }else if(type==="ETF/상장클래스 분배금입금"){
-      const key=matchETFKey(name,allowedKeys);if(!key||amt<=0)continue;
+    }else{
+      if(amt<=0)continue;
       dividends.push({etf:key,date,amount:amt});
     }
   }
-  return{buys,sells,dividends};
+  return{buys,sells,dividends,unmatched};
 }
 const DEF_ISA={나스닥:{avgPrice:0,qty:0},SP500:{avgPrice:0,qty:0},반도체:{avgPrice:0,qty:0},레버리지:{avgPrice:0,qty:0}};
 
@@ -1010,26 +1014,35 @@ function divPreviewLine(d){
   const nm=(ISA_ETF[d.etf]?.label||d.etf).replace("TIGER ","").replace("(합성)","");
   return`[배당] ${d.date}  ${nm}  ${d.amount.toLocaleString()}원`;
 }
+function unmatchedWarning(unmatched){
+  const names=[...new Set(unmatched)];
+  if(names.length===0)return"";
+  return`\n\n⚠ 인식 못해 제외된 종목 (${names.length}개) — 코드에 등록이 필요합니다:\n${names.join("\n")}`;
+}
 async function importTxFile(file){
   const text=await file.text();
-  const{buys,sells,dividends}=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","삼성전자"]);
+  const{buys,sells,dividends,unmatched}=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","삼성전자"]);
   const txParsed=[...buys,...sells];
-  if(txParsed.length===0&&dividends.length===0){showToast("인식된 내역이 없습니다");return;}
+  const warn=unmatchedWarning(unmatched);
+  if(txParsed.length===0&&dividends.length===0){
+    showToast(unmatched.length>0?`인식 못한 종목이 있어 제외했습니다: ${[...new Set(unmatched)].join(", ")}`:"인식된 내역이 없습니다");
+    return;
+  }
   if(!appData.transactions)appData.transactions=[];
   if(!appData.dividends)appData.dividends=[];
   const existingTx=new Set(appData.transactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}|${t.type||"buy"}`));
   const toAddTx=txParsed.filter(p=>!existingTx.has(`${p.date}|${p.etf}|${p.qty}|${p.price}|${p.type}`));
   const existingDiv=new Set(appData.dividends.map(d=>`${d.date}|${d.etf}|${d.amount}`));
   const toAddDiv=dividends.filter(d=>!existingDiv.has(`${d.date}|${d.etf}|${d.amount}`));
-  if(toAddTx.length===0&&toAddDiv.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  if(toAddTx.length===0&&toAddDiv.length===0){showToast(`새로 추가할 내역이 없습니다 (모두 중복)${warn?" · 미인식 종목 있음":""}`);return;}
   const preview=[...toAddTx.map(txPreviewLine),...toAddDiv.map(divPreviewLine)].join("\n");
-  if(!confirm(`[ISA] 아래 ${toAddTx.length+toAddDiv.length}건을 추가합니다.\n\n${preview}`))return;
+  if(!confirm(`[ISA] 아래 ${toAddTx.length+toAddDiv.length}건을 추가합니다.\n\n${preview}${warn}`))return;
   toAddTx.forEach(p=>appData.transactions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
   toAddDiv.forEach(d=>appData.dividends.push({id:`d${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...d}));
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  if(ok){showToast(`${toAddTx.length+toAddDiv.length}건 추가됐습니다 ✓`);renderTxList();renderISAPortfolio();renderIsaDivList();}
+  if(ok){showToast(`${toAddTx.length+toAddDiv.length}건 추가됐습니다 ✓${warn?` (미인식 종목 ${[...new Set(unmatched)].length}개 제외)`:""}`);renderTxList();renderISAPortfolio();renderIsaDivList();}
 }
 async function addTransaction(){
   const etf=document.getElementById("tx-etf")?.value;
@@ -1318,24 +1331,28 @@ function handlePtxFile(event){
 }
 async function importPtxFile(file){
   const text=await file.text();
-  const{buys,sells,dividends}=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","배당다우존스"]);
+  const{buys,sells,dividends,unmatched}=parseMiraeTxFile(text,["나스닥","SP500","반도체","레버리지","배당다우존스"]);
   const txParsed=[...buys,...sells];
-  if(txParsed.length===0&&dividends.length===0){showToast("인식된 내역이 없습니다");return;}
+  const warn=unmatchedWarning(unmatched);
+  if(txParsed.length===0&&dividends.length===0){
+    showToast(unmatched.length>0?`인식 못한 종목이 있어 제외했습니다: ${[...new Set(unmatched)].join(", ")}`:"인식된 내역이 없습니다");
+    return;
+  }
   if(!appData.pensionTransactions)appData.pensionTransactions=[];
   if(!appData.pensionDividends)appData.pensionDividends=[];
   const existingTx=new Set(appData.pensionTransactions.map(t=>`${t.date}|${t.etf}|${t.qty}|${t.price}|${t.type||"buy"}`));
   const toAddTx=txParsed.filter(p=>!existingTx.has(`${p.date}|${p.etf}|${p.qty}|${p.price}|${p.type}`));
   const existingDiv=new Set(appData.pensionDividends.map(d=>`${d.date}|${d.etf}|${d.amount}`));
   const toAddDiv=dividends.filter(d=>!existingDiv.has(`${d.date}|${d.etf}|${d.amount}`));
-  if(toAddTx.length===0&&toAddDiv.length===0){showToast("새로 추가할 내역이 없습니다 (모두 중복)");return;}
+  if(toAddTx.length===0&&toAddDiv.length===0){showToast(`새로 추가할 내역이 없습니다 (모두 중복)${warn?" · 미인식 종목 있음":""}`);return;}
   const preview=[...toAddTx.map(txPreviewLine),...toAddDiv.map(divPreviewLine)].join("\n");
-  if(!confirm(`[연금저축] 아래 ${toAddTx.length+toAddDiv.length}건을 추가합니다.\n\n${preview}`))return;
+  if(!confirm(`[연금저축] 아래 ${toAddTx.length+toAddDiv.length}건을 추가합니다.\n\n${preview}${warn}`))return;
   toAddTx.forEach(p=>appData.pensionTransactions.push({id:`p${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...p}));
   toAddDiv.forEach(d=>appData.pensionDividends.push({id:`pd${Date.now()}-${Math.random().toString(36).slice(2,6)}`,...d}));
   setSB("syncing","저장 중...");
   const ok=await saveToGist();
   setSB(ok?"synced":"error",ok?"동기화됨":"저장 실패");
-  if(ok){showToast(`${toAddTx.length+toAddDiv.length}건 추가됐습니다 ✓`);renderPensionTxList();renderPensionPortfolio();renderPensionDivList();}
+  if(ok){showToast(`${toAddTx.length+toAddDiv.length}건 추가됐습니다 ✓${warn?` (미인식 종목 ${[...new Set(unmatched)].length}개 제외)`:""}`);renderPensionTxList();renderPensionPortfolio();renderPensionDivList();}
 }
 async function addPensionTransaction(){
   const etf=document.getElementById("ptx-etf")?.value,date=document.getElementById("ptx-date")?.value;
