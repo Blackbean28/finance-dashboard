@@ -924,6 +924,22 @@ function isaMonthsElapsed(){
   const[cy,cm]=curMonth.split("-").map(Number);
   return Math.max(1,(cy-fy)*12+(cm-fm)+1);
 }
+// MA50 이탈도(저가일수록 ↑) · 변동성 역가중(낮을수록 ↑) 조정치. 각각 클램프 후 결합치도 재클램프.
+function computeAllocTilt(k,keys){
+  const cur=isaLivePrices[k],ma=isaMA50[k];
+  let maTilt=1;
+  if(cur>0&&ma>0){
+    const dev=(cur-ma)/ma; // 음수 = MA50보다 싸다(저가구간)
+    maTilt=Math.max(0.6,Math.min(1.4,1-1.5*dev));
+  }
+  let volTilt=1;
+  const vols=keys.map(kk=>isaVol[kk]).filter(v=>v>0);
+  if(isaVol[k]>0&&vols.length>0){
+    const avgVol=vols.reduce((s,v)=>s+v,0)/vols.length;
+    volTilt=Math.max(0.7,Math.min(1.3,avgVol/isaVol[k]));
+  }
+  return Math.max(0.5,Math.min(1.8,maTilt*volTilt));
+}
 function renderAllocSuggestion(){
   const el=document.getElementById("isa-alloc-suggestion");if(!el)return;
   const keys=["나스닥","SP500","반도체"];
@@ -936,25 +952,33 @@ function renderAllocSuggestion(){
     const cur=isaLivePrices[k]||0;
     const priced=cur>0&&qty>0;
     const curValue=priced?qty*cur:(holdings[k]?.totalCost||0);
-    return{k,cumTarget,curValue,priced,need:Math.max(0,cumTarget-curValue)};
+    const need=Math.max(0,cumTarget-curValue);
+    return{k,cumTarget,curValue,priced,need,tilt:computeAllocTilt(k,keys)};
   });
   const totalNeed=rows.reduce((s,r)=>s+r.need,0);
   if(totalNeed<=0){
     el.innerHTML=`<div class="card" style="margin-bottom:10px;padding:14px 16px;color:var(--text3);font-size:12px;text-align:center">누적 목표 평가액을 이미 채우셨습니다 ✓ (Value Averaging 기준)</div>`;
     return;
   }
-  const sorted=rows.filter(r=>r.need>0).sort((a,b)=>b.need-a.need);
+  // 전체 추천 총액(VA 기준)은 그대로 두고, MA50·변동성 조정치로 종목 간 배분만 재분배
+  const tiltedSum=rows.reduce((s,r)=>s+r.need*r.tilt,0);
+  const scale=tiltedSum>0?totalNeed/tiltedSum:1;
+  const finalRows=rows.map(r=>({...r,finalNeed:r.need*r.tilt*scale}));
+  const sorted=finalRows.filter(r=>r.finalNeed>0).sort((a,b)=>b.finalNeed-a.finalNeed);
   el.innerHTML=`<div class="card" style="margin-bottom:10px">
-    <div class="slval" style="margin-bottom:8px">${dispM(curMonth)} 매수 배분 제안 <span style="font-size:10px;color:var(--text3);font-weight:400">(Value Averaging · 누적 ${months}개월 목표 평가액 기준)</span></div>
-    ${sorted.map(r=>`
+    <div class="slval" style="margin-bottom:8px">${dispM(curMonth)} 매수 배분 제안 <span style="font-size:10px;color:var(--text3);font-weight:400">(VA + 변동성·MA50 조정 · 누적 ${months}개월 기준)</span></div>
+    ${sorted.map(r=>{
+      const tiltPct=Math.round((r.tilt-1)*100);
+      const tiltTag=Math.abs(tiltPct)>=5?`<span style="color:${tiltPct>0?"var(--green)":"var(--text3)"}">${tiltPct>0?"+":""}${tiltPct}% 조정</span>`:"";
+      return`
       <div style="padding:6px 0;border-bottom:0.5px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:13px;display:flex;align-items:center;gap:6px"><span class="dot" style="background:${ISA_ETF[r.k].color}"></span>${ISA_ETF[r.k].label.replace("TIGER ","").replace("(합성)","")}</span>
-          <span style="font-size:13px;font-weight:500">${fw(r.need)} 추천</span>
+          <span style="font-size:13px;font-weight:500">${fw(r.finalNeed)} 추천</span>
         </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">${[r.priced?"":"가격 미조회 · 원가 기준",maBadge(r.k).replace(/^ · /,""),volBadge(r.k).replace(/^ · /,"")].filter(Boolean).join(" · ")}</div>
-      </div>`).join("")}
-    <div style="font-size:11px;color:var(--text3);padding-top:6px">누적 목표 대비 부족액 합계 ${fw(totalNeed)}<br>· 하락장 직후엔 이 금액이 평소보다 크게 나올 수 있습니다 (VA 방식의 정상 동작)<br>· MA/변동성은 참고용이며 매수 신호가 아닙니다</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${[r.priced?"":"가격 미조회 · 원가 기준",`VA ${fwS(r.need)}원`,tiltTag,maBadge(r.k).replace(/^ · /,""),volBadge(r.k).replace(/^ · /,"")].filter(Boolean).join(" · ")}</div>
+      </div>`;}).join("")}
+    <div style="font-size:11px;color:var(--text3);padding-top:6px">누적 목표 대비 부족액 합계 ${fw(totalNeed)} (총액은 VA와 동일, 배분만 조정)<br>· MA50 대비 저가일수록, 변동성이 평균보다 낮을수록 이번 달 배분이 늘어납니다<br>· 하락장 직후엔 총액 자체가 평소보다 크게 나올 수 있습니다 (VA 방식의 정상 동작)</div>
   </div>`;
 }
 function calcMonthlyISA(month){
