@@ -1,0 +1,156 @@
+name: Weekly Discord Digest
+
+on:
+  schedule:
+    - cron: '0 23 * * 0'  # 매주 월요일 08:00 KST
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and send digest
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python3 - << 'PYEOF'
+          import json, urllib.request, datetime, os
+
+          GIST_TOKEN = os.environ["GIST_TOKEN"]
+          GIST_ID = os.environ["GIST_ID"]
+          WEBHOOK = os.environ["DISCORD_WEBHOOK_URL"]
+
+          req = urllib.request.Request(
+              f"https://api.github.com/gists/{GIST_ID}",
+              headers={"Authorization": f"token {GIST_TOKEN}"},
+          )
+          with urllib.request.urlopen(req, timeout=15) as r:
+              gist = json.load(r)
+          app = json.loads(gist["files"]["finance-data.json"]["content"])
+
+          with open("prices.json", encoding="utf-8") as f:
+              prices_data = json.load(f)
+          prices = prices_data.get("prices", {})
+          ma50 = prices_data.get("ma50", {})
+
+          now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+          cur_month = now.strftime("%Y-%m")
+
+          DEF_TARGETS = {"적금": 500000, "나스닥": 750000, "SP500": 450000, "반도체": 300000, "QLD": 200000, "CMA": 300000}
+          targets = {**DEF_TARGETS, **app.get("targets", {})}
+          ICATS = ["적금", "나스닥", "SP500", "반도체", "QLD", "CMA"]
+
+          months = app.get("months", {})
+          mdata = months.get(cur_month, {})
+
+          # 이번 달 투자 진행률 (대시보드 renderDash의 totalNow/totalTgt 로직과 동일)
+          total_now = sum(mdata.get(c, 0) for c in ["적금", "QLD", "CMA"]) + mdata.get("isaDeposit", 0)
+          total_tgt = sum(targets.get(c, 0) for c in ICATS)
+          pct_now = min(round(total_now / total_tgt * 100), 100) if total_tgt > 0 else 0
+
+          # 평단가(이동평균) 방식 보유 계산 - 대시보드 computeHoldings와 동일
+          def compute_holdings(txs):
+              h = {}
+              keys = ["나스닥", "SP500", "반도체", "레버리지", "삼성전자", "배당다우존스"]
+              for k in keys:
+                  etx = sorted([t for t in txs if t.get("etf") == k], key=lambda t: t["date"])
+                  qty = 0
+                  cost = 0
+                  for t in etx:
+                      if t.get("type") == "sell":
+                          sell_qty = min(t["qty"], qty)
+                          avg = cost / qty if qty > 0 else 0
+                          cost_removed = avg * sell_qty
+                          qty -= sell_qty
+                          cost = max(0, cost - cost_removed)
+                      else:
+                          qty += t["qty"]
+                          cost += t["qty"] * t["price"]
+                  h[k] = {"qty": qty, "cost": cost}
+              return h
+
+          holdings = compute_holdings(app.get("transactions", []))
+
+          txs = app.get("transactions", [])
+          if txs:
+              first_month = min(t["date"][:7] for t in txs)
+              fy, fm = map(int, first_month.split("-"))
+              cy, cm = map(int, cur_month.split("-"))
+              months_elapsed = max(1, (cy - fy) * 12 + (cm - fm) + 1)
+          else:
+              months_elapsed = 1
+
+          # ISA 매수 배분 제안 (Value Averaging) - renderAllocSuggestion과 동일
+          va_keys = ["나스닥", "SP500", "반도체"]
+          va_lines = []
+          total_need = 0
+          for k in va_keys:
+              cum_target = targets.get(k, 0) * months_elapsed
+              qty = holdings[k]["qty"]
+              cur = prices.get(k, 0)
+              cur_value = qty * cur if (cur > 0 and qty > 0) else holdings[k]["cost"]
+              need = max(0, cum_target - cur_value)
+              total_need += need
+              if need > 0:
+                  va_lines.append((k, need))
+          va_lines.sort(key=lambda x: -x[1])
+
+          # ISA 연간 납입한도
+          year = str(now.year)
+          isa_limit = app.get("settings", {}).get("isaYearlyLimit", 20000000)
+          isa_usage = sum(months.get(m, {}).get("isaDeposit", 0) for m in months if m.startswith(year))
+          isa_remaining = isa_limit - isa_usage
+
+          # MA50 참고 (저가/고가 구간)
+          ma_lines = []
+          for k in va_keys:
+              qty = holdings[k]["qty"]
+              cur = prices.get(k, 0)
+              m = ma50.get(k, 0)
+              if qty > 0 and cur > 0 and m > 0:
+                  diff = (cur - m) / m * 100
+                  word = "저가 구간" if diff <= 0 else "고가 구간"
+                  ma_lines.append(f"{k}: MA50 {diff:+.1f}% ({word})")
+
+          def fw(n):
+              n = int(n)
+              if n >= 100000000:
+                  return f"{n/100000000:.1f}억원"
+              if n >= 10000:
+                  return f"{round(n/10000)}만원"
+              return f"{n:,}원"
+
+          lines = []
+          lines.append(f"**📊 주간 재테크 다이제스트** ({now.strftime('%Y-%m-%d')})")
+          lines.append("")
+          lines.append(f"**이번 달 투자 진행률**: {pct_now}% ({fw(total_now)} / {fw(total_tgt)})")
+          lines.append("")
+          if va_lines:
+              lines.append(f"**ISA 매수 배분 제안** (VA 기준, 부족 {fw(total_need)})")
+              for k, need in va_lines:
+                  lines.append(f"· {k}: {fw(need)} 추천")
+          else:
+              lines.append("**ISA 매수 배분**: 누적 목표 평가액 이미 달성 ✓")
+          lines.append("")
+          lines.append(f"**ISA 연간 납입한도**: {fw(isa_usage)} / {fw(isa_limit)} (잔여 {fw(isa_remaining)})")
+          if ma_lines:
+              lines.append("")
+              lines.append("**MA50 참고**")
+              for l in ma_lines:
+                  lines.append(f"· {l}")
+
+          content = "\n".join(lines)
+          print(content)
+
+          body = json.dumps({"content": content}).encode("utf-8")
+          req2 = urllib.request.Request(
+              WEBHOOK, data=body, headers={"Content-Type": "application/json"}, method="POST"
+          )
+          with urllib.request.urlopen(req2, timeout=15) as r:
+              print("Discord status:", r.status)
+          PYEOF
