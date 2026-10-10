@@ -1,0 +1,137 @@
+name: Watchlist Screener
+
+on:
+  schedule:
+    - cron: '10 7 * * 1-5'  # 평일 16:10 KST (ETF 가격 수집 직후)
+  workflow_dispatch:
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run screener
+        run: |
+          python3 - << 'PYEOF'
+          import json, math, statistics, urllib.request, datetime
+
+          HEADERS = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+          }
+
+          def fetch_yahoo(ticker):
+              url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1y"
+              req = urllib.request.Request(url, headers=HEADERS)
+              with urllib.request.urlopen(req, timeout=15) as r:
+                  data = json.loads(r.read())
+                  result = data["chart"]["result"][0]
+                  price = result["meta"]["regularMarketPrice"]
+                  closes = [c for c in result["indicators"]["quote"][0]["close"] if c is not None]
+                  return price, closes
+
+          def sma(closes, n):
+              if len(closes) < n:
+                  return None
+              return sum(closes[-n:]) / n
+
+          def volatility(closes, n=60):
+              if len(closes) < n + 1:
+                  return None
+              window = closes[-(n + 1):]
+              rets = [math.log(window[i] / window[i - 1]) for i in range(1, len(window)) if window[i - 1] > 0]
+              if not rets:
+                  return None
+              mean = sum(rets) / len(rets)
+              var = sum((r - mean) ** 2 for r in rets) / len(rets)
+              return (var ** 0.5) * (252 ** 0.5)
+
+          def zlist(vals):
+              valid = [v for v in vals if v is not None]
+              if len(valid) < 2:
+                  return [0] * len(vals)
+              mean = statistics.mean(valid)
+              stdev = statistics.pstdev(valid) or 1
+              return [((v - mean) / stdev if v is not None else 0) for v in vals]
+
+          # 우주항공 / 뉴스페이스 워치리스트 (기술적 모멘텀 스크리너 - 재무/밸류에이션 미반영)
+          WATCHLIST = {
+            "로켓랩":       "RKLB",
+            "쎄트렉아이":   "099320.KQ",
+            "AP위성":       "211270.KQ",
+            "비나텍":       "126340.KQ",
+            "LS머티리얼즈": "417200.KQ",
+            "KAI":          "047810.KS",
+            "인텔리안테크": "189300.KQ",
+            "루미르":       "474170.KQ",
+            "비츠로셀":     "082920.KQ",
+            "Redwire":      "RDW",
+          }
+
+          data = {}
+          for name, ticker in WATCHLIST.items():
+              try:
+                  price, closes = fetch_yahoo(ticker)
+                  if not price or len(closes) < 20:
+                      print(f"✗ {name} ({ticker}) 데이터 부족")
+                      continue
+                  m50 = sma(closes, 50)
+                  m200 = sma(closes, 200)
+                  v = volatility(closes)
+                  high52 = max(closes[-252:])
+                  low52 = min(closes[-252:])
+                  mo1 = closes[-21] if len(closes) >= 21 else closes[0]
+                  data[name] = {
+                      "ticker": ticker, "price": price, "ma50": m50, "ma200": m200,
+                      "vol": v, "high52": high52, "low52": low52,
+                      "ma50_dev": (price - m50) / m50 if m50 else None,
+                      "mo1_ret": (price - mo1) / mo1 if mo1 else None,
+                      "high52_gap": (price - high52) / high52 if high52 else None,
+                  }
+                  print(f"✓ {name} ({ticker}): {price}")
+              except Exception as e:
+                  print(f"✗ {name} ({ticker}) 실패: {e}")
+
+          names = list(data.keys())
+          ma50_devs = zlist([data[n]["ma50_dev"] for n in names])
+          mo1_rets = zlist([data[n]["mo1_ret"] for n in names])
+          high52_gaps = zlist([data[n]["high52_gap"] for n in names])
+          vols = zlist([data[n]["vol"] for n in names])
+
+          ranking = []
+          for i, n in enumerate(names):
+              score = ma50_devs[i] + mo1_rets[i] + high52_gaps[i] - vols[i]
+              d = data[n]
+              ranking.append({
+                  "name": n, "ticker": d["ticker"], "score": round(score, 3),
+                  "price": d["price"], "ma50_dev": d["ma50_dev"], "mo1_ret": d["mo1_ret"],
+                  "high52_gap": d["high52_gap"], "vol": d["vol"],
+              })
+          ranking.sort(key=lambda r: -r["score"])
+
+          now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+          result = {
+            "ranking": ranking,
+            "updated": now.strftime("%Y-%m-%d %H:%M KST"),
+            "date": now.strftime("%Y-%m-%d"),
+            "note": "기술적 모멘텀(MA50·1개월수익률·52주고점대비·변동성) 기준 스크리너. 재무/밸류에이션 미반영, 매수 권유 아님.",
+          }
+
+          with open("watchlist.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, ensure_ascii=False, indent=2)
+
+          print(f"\n저장 완료: {len(ranking)}개 종목")
+          PYEOF
+
+      - name: Commit and push
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add watchlist.json
+          git diff --staged --quiet || git commit -m "chore: update watchlist screener $(date +'%Y-%m-%d')"
+          git push

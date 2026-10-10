@@ -144,6 +144,20 @@ jobs:
               for l in ma_lines:
                   lines.append(f"· {l}")
 
+          # 우주항공 워치리스트 스크리너 (watchlist-screener.yml이 매일 생성)
+          try:
+              with open("watchlist.json", encoding="utf-8") as f:
+                  wl = json.load(f)
+              top3 = wl.get("ranking", [])[:3]
+              if top3:
+                  lines.append("")
+                  lines.append(f"**🚀 우주항공 워치리스트 TOP 3** ({wl.get('date','')} 기준, 기술적 모멘텀)")
+                  for r in top3:
+                      lines.append(f"· {r['name']} ({r['ticker']}): score {r['score']:+.2f} · MA50 {r['ma50_dev']*100:+.1f}% · 1개월 {r['mo1_ret']*100:+.1f}%")
+                  lines.append("· 재무/밸류에이션 미반영, 참고용이며 매수 권유 아닙니다")
+          except Exception as e:
+              print("watchlist.json 읽기 실패 (스킵):", e)
+
           content = "\n".join(lines)
           print(content)
 
